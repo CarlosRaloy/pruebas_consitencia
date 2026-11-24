@@ -1,0 +1,7 @@
+.env
+.venv/
+venv/
+__pycache__/
+staticfiles/
+security_audit.log
+*.pyc

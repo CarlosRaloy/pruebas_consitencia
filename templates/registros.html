@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pruebas de consistencia</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/logo2.png">
+    <style>
+        :root {
+            --slate-900: #0f172a;
+            --slate-800: #1e293b;
+            --slate-700: #334155;
+            --slate-600: #475569;
+            --slate-500: #64748b;
+            --slate-300: #cbd5e1;
+            --slate-200: #e2e8f0;
+            --slate-100: #f1f5f9;
+            --slate-50:  #f8fafc;
+
+            --brand-primary: #2563eb;
+            --brand-hover: #1d4ed8;
+            --brand-cyan: #0891b2;
+
+            --status-pass-bg: #f0fdf4;
+            --status-pass-text: #166534;
+            --status-pass-border: #bbf7d0;
+
+            --status-warn-bg: #fffbeb;
+            --status-warn-text: #b45309;
+            --status-warn-border: #fef08a;
+
+            --status-fail-bg: #fef2f2;
+            --status-fail-text: #991b1b;
+            --status-fail-border: #fecaca;
+
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-sans); }
+
+        body {
+            background-color: #0b0f19;
+            color: var(--slate-800);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-shell {
+            display: flex;
+            width: 100%;
+            max-width: 1536px;
+            height: 94vh;
+            background: var(--slate-900);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* SIDEBAR LIMS */
+        .sidebar {
+            width: 260px;
+            background: #0f172a;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            color: var(--slate-100);
+            border-right: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1rem; letter-spacing: 0.5px; color: #fff; }
+        .brand-icon { width: 14px; height: 14px; background: var(--brand-cyan); border-radius: 3px; box-shadow: 0 0 10px var(--brand-cyan); }
+
+        .workspace-card {
+            background: rgba(255,255,255,0.03);
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            color: var(--slate-300);
+            margin-top: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .workspace-card strong { color: #fff; font-family: var(--font-mono); }
+
+        .nav-title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--slate-500); margin-bottom: 10px; font-weight: 700; }
+        .nav-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+        .nav-item a { display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: var(--slate-300); text-decoration: none; border-radius: 8px; font-size: 0.85rem; font-weight: 500; transition: all 0.15s ease; }
+        .nav-item.active a { background: rgba(255,255,255,0.08); color: #ffffff; font-weight: 600; border-left: 3px solid var(--brand-cyan); }
+
+        .user-profile { display: flex; align-items: center; gap: 10px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .avatar { width: 32px; height: 32px; border-radius: 6px; background: var(--slate-700); border: 1px solid var(--slate-600); }
+        .user-info .name { font-weight: 600; font-size: 0.8rem; color: #fff; }
+        .user-info .role { font-size: 0.7rem; color: var(--slate-400); font-family: var(--font-mono); }
+
+        /* MAIN CONTENT SECTION */
+        .main-content {
+            flex: 1;
+            background: var(--slate-100);
+            border-radius: 12px;
+            margin: 6px;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .header-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--slate-200); }
+        .header-bar h1 { font-size: 1.35rem; color: var(--slate-900); font-weight: 700; letter-spacing: -0.3px; }
+        .header-actions { display: flex; gap: 8px; }
+
+        .action-btn {
+            background: var(--slate-800);
+            color: #fff;
+            border: 1px solid var(--slate-700);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        .action-btn:hover { background: var(--slate-900); }
+        .action-btn.secondary { background: var(--brand-primary); border-color: var(--brand-hover); }
+        .action-btn.secondary:hover { background: var(--brand-hover); }
+
+        .bento-card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--slate-200);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+        .card-header h2 { font-size: 1rem; color: var(--slate-900); font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+        /* BUSCADOR Y FILTROS */
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .input-control {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--slate-300);
+            font-size: 0.85rem;
+            outline: none;
+            background: #fff;
+        }
+        .input-control:focus {
+            border-color: var(--brand-primary);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        }
+
+        /* TABLA DE REGISTROS */
+        .tabla-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid var(--slate-200); }
+        .tabla-lims { width: 100%; border-collapse: collapse; background: #ffffff; font-size: 0.85rem; }
+        .tabla-lims th { background: var(--slate-900); color: #ffffff; padding: 10px 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; border: none; text-transform: uppercase; text-align: left; }
+        .tabla-lims td { padding: 12px; border-bottom: 1px solid var(--slate-200); vertical-align: middle; }
+        .tabla-lims tr:hover { background-color: var(--slate-50); }
+
+        .badge { display: inline-block; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; font-family: var(--font-sans); text-transform: uppercase; }
+        .badge-success { background-color: var(--status-pass-bg); color: var(--status-pass-text); border: 1px solid var(--status-pass-border); }
+        .badge-warning { background-color: var(--status-warn-bg); color: var(--status-warn-text); border: 1px solid var(--status-warn-border); }
+        .badge-danger { background-color: var(--status-fail-bg); color: var(--status-fail-text); border: 1px solid var(--status-fail-border); }
+
+        .btn-icon {
+            background: none;
+            border: 1px solid var(--slate-200);
+            padding: 5px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.15s ease;
+        }
+        .btn-icon:hover { background: var(--slate-100); }
+
+        #status-toast { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 6px; background: var(--status-pass-bg); color: var(--status-pass-text); font-size: 0.82rem; font-weight: 600; border: 1px solid var(--status-pass-border); }
+    </style>
+</head>
+<body>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div>
+               <div class="brand"><img src="/static/logo.png" alt="Logo LIMS" style="height: 32px; width: auto; object-fit: contain;"><span>Pruebas de consistencia LAB</span></div>
+                <div class="workspace-card">
+                    Módulo de Validación<br>
+                    <strong>ISO 5725-2</strong>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-title">Gestión de Calidad</div>
+                    <ul class="nav-list">
+                        <li class="nav-item"><a href="index.html">📊 Consola Consistencia</a></li>
+                        <li class="nav-item active"><a href="registros.html">🧪 Registro de estudios</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="user-profile">
+                <div class="avatar"></div>
+                <div class="user-info">
+                    <div class="name">POWERED BY</div>
+                    <div class="role">JEMV</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="header-bar">
+                <h1>Historial y Registro de Muestras Guardadas</h1>
+                <div class="header-actions">
+                    <a href="index.html" class="action-btn secondary">➕ Nuevo Ensayo</a>
+                </div>
+            </div>
+
+            <!-- FILTROS Y BÚSQUEDA -->
+<div class="bento-card">
+    <div class="card-header">
+        <h2>🔍 Búsqueda y Filtros de Archivo</h2>
+    </div>
+    <div class="filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+        <div>
+            <label style="font-size: 0.72rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Buscar Muestra / Lote:</label>
+            <input type="text" id="input-buscar" class="input-control" placeholder="Ej. MUESTRA-2026-001..." onkeyup="filtrarTabla()">
+        </div>
+        <div>
+            <label style="font-size: 0.72rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Filtrar por Método:</label>
+            <select id="select-filtro-metodo" class="input-control" onchange="filtrarTabla()">
+                <option value="">Todos los Métodos</option>
+            </select>
+        </div>
+        <div>
+            <label style="font-size: 0.72rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Dictamen Global:</label>
+            <select id="select-filtro-dictamen" class="input-control" onchange="filtrarTabla()">
+                <option value="">Todos los Estados</option>
+                <option value="CONFORME">CONFORME</option>
+                <option value="ADVERTENCIA">ADVERTENCIA</option>
+                <option value="NO CONFORME">NO CONFORME</option>
+            </select>
+        </div>
+        <!-- NUEVO: Fecha Desde -->
+        <div>
+            <label style="font-size: 0.72rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Fecha Desde:</label>
+            <input type="date" id="input-fecha-desde" class="input-control" onchange="filtrarTabla()">
+        </div>
+        <!-- NUEVO: Fecha Hasta -->
+        <div>
+            <label style="font-size: 0.72rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Fecha Hasta:</label>
+            <input type="date" id="input-fecha-hasta" class="input-control" onchange="filtrarTabla()">
+        </div>
+        <!-- NUEVO: Orden Cronológico -->
+        <div>
+            <label style="font-size: 0.72rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Orden Cronológico:</label>
+            <select id="select-orden-fecha" class="input-control" onchange="filtrarTabla()">
+                <option value="desc">Más reciente a más antiguo</option>
+                <option value="asc">Más antiguo a más reciente</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+            <!-- TABLA DE MUESTRAS ALMACENADAS -->
+            <div class="bento-card">
+                <div class="card-header">
+                    <h2>📋 Muestras Registradas en Base de Datos</h2>
+                </div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-lims">
+                        <thead>
+                            <tr>
+                                <th>Fecha / Hora</th>
+                                <th>N°Lote</th>
+                                <th>Método Normativo</th>
+                                <th>N° Labs</th>
+                                <th>Gran Promedio (X̄)</th>
+                                <th>Dictamen Global</th>
+                                <th style="text-align: center;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-registros">
+                            <!-- Datos cargados desde SQLite via API -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="status-toast"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+    let registrosLocales = [
+        { id: 1, fecha: "2026-10-12 09:30", muestra: "MUESTRA-2026-001", metodo: "ASTM D1121", labs: 8, promedio: "2.852", dictamen: "CONFORME" },
+        { id: 2, fecha: "2026-10-11 14:15", muestra: "MUESTRA-2026-002", metodo: "ASTM D1287", labs: 6, promedio: "8.420", dictamen: "ADVERTENCIA" },
+        { id: 3, fecha: "2026-10-10 11:00", muestra: "MUESTRA-2026-003", metodo: "ISO 5725-2", labs: 10, promedio: "1.045", dictamen: "NO CONFORME" }
+    ];
+
+    // 1. Cargar el catálogo dinámico de métodos desde la BD
+    async function cargarMetodosSelect() {
+        try {
+            const resp = await fetch('/metodos');
+            if (!resp.ok) return;
+            const metodos = await resp.json();
+
+            const selectFiltro = document.getElementById('select-filtro-metodo');
+            if (selectFiltro) {
+                selectFiltro.innerHTML = '<option value="">Todos los Métodos</option>';
+                metodos.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.nombre;
+                    opt.textContent = m.nombre;
+                    selectFiltro.appendChild(opt);
+                });
+            }
+        } catch (err) {
+            console.log("No se pudo cargar el catálogo de métodos desde la BD.");
+        }
+    }
+
+    // 2. Obtener registros de la BD
+    async function cargarRegistros() {
+        try {
+            const res = await fetch('/obtener_registros');
+            if (res.ok) {
+                const data = await res.json();
+                registrosLocales = data;
+            }
+        } catch (err) {
+            console.log("Usando datos locales para demostración visual.");
+        }
+        await cargarMetodosSelect();
+        filtrarTabla(); // Aplicar filtros al cargar
+    }
+
+    // 3. Renderizar las filas recibidas
+    function renderizarTabla(lista) {
+        const tbody = document.getElementById('tbody-registros');
+        if (!tbody) return;
+
+        if (lista.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--slate-500); padding: 20px;">No se encontraron muestras que coincidan con los filtros.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = lista.map(reg => {
+            let badgeClass = 'badge-success';
+            if (reg.dictamen === 'ADVERTENCIA') badgeClass = 'badge-warning';
+            if (reg.dictamen === 'NO CONFORME') badgeClass = 'badge-danger';
+
+            return `
+                <tr>
+                    <td style="font-family: var(--font-mono); font-size: 0.78rem;">${reg.fecha}</td>
+                    <td style="font-weight: 700; font-family: var(--font-mono);">${reg.muestra}</td>
+                    <td>${reg.metodo}</td>
+                    <td>${reg.labs}</td>
+                    <td style="font-family: var(--font-mono); font-weight: 600;">${reg.promedio}</td>
+                    <td><span class="badge ${badgeClass}">${reg.dictamen}</span></td>
+                    <td style="text-align: center;">
+                        <button class="btn-icon" title="Ver / Cargar en Consola" style="background-color:#00F566; color:#000;" onclick="cargarEnConsola('${reg.muestra}')">Ver registro</button>
+                        <button class="btn-icon" title="Exportar PDF" onclick="descargarPDF('${reg.muestra}')">📄</button>
+                        <button class="btn-icon" title="Exportar Excel" onclick="descargarExcel('${reg.muestra}')">📊</button>
+                        <button class="btn-icon" style="color:#dc2626;" title="Eliminar" onclick="eliminarRegistro(${reg.id})">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // 4. Filtrar y Ordenar sobre el arreglo de datos
+    function filtrarTabla() {
+        const textoBuscar = document.getElementById('input-buscar').value.toLowerCase().trim();
+        const metodoFiltro = document.getElementById('select-filtro-metodo').value;
+        const dictamenFiltro = document.getElementById('select-filtro-dictamen').value;
+        const fechaDesde = document.getElementById('input-fecha-desde').value; // YYYY-MM-DD
+        const fechaHasta = document.getElementById('input-fecha-hasta').value; // YYYY-MM-DD
+        const orden = document.getElementById('select-orden-fecha').value; // "asc" o "desc"
+
+        // Filtrado
+        let resultados = registrosLocales.filter(reg => {
+            const coincideLote = !textoBuscar || reg.muestra.toLowerCase().includes(textoBuscar);
+            const coincideMetodo = !metodoFiltro || reg.metodo === metodoFiltro;
+            const coincideDictamen = !dictamenFiltro || reg.dictamen === dictamenFiltro;
+
+            // Extraer solo la fecha de la cadena "YYYY-MM-DD HH:MM"
+            const fechaReg = reg.fecha ? reg.fecha.substring(0, 10) : '';
+
+            let coincideFecha = true;
+            if (fechaDesde && fechaReg) {
+                coincideFecha = coincideFecha && (fechaReg >= fechaDesde);
+            }
+            if (fechaHasta && fechaReg) {
+                coincideFecha = coincideFecha && (fechaReg <= fechaHasta);
+            }
+
+            return coincideLote && coincideMetodo && coincideDictamen && coincideFecha;
+        });
+
+        // Ordenamiento Cronológico
+        resultados.sort((a, b) => {
+            const fechaA = a.fecha || '';
+            const fechaB = b.fecha || '';
+
+            if (orden === 'asc') {
+                return fechaA.localeCompare(fechaB); // Más antiguo a más nuevo
+            } else {
+                return fechaB.localeCompare(fechaA); // Más reciente a más antiguo
+            }
+        });
+
+        // Dibujar resultados filtrados
+        renderizarTabla(resultados);
+    }
+
+    function cargarEnConsola(numMuestra) {
+        window.location.href = `/consola?muestra=${encodeURIComponent(numMuestra)}`;
+    }
+
+    async function descargarPDF(muestra) {
+        try {
+            const resMuestra = await fetch(`/obtener_muestra/${encodeURIComponent(muestra)}`);
+            if (!resMuestra.ok) throw new Error("No se encontraron los datos de la muestra.");
+
+            const dataMuestra = await resMuestra.json();
+            const participantes = (dataMuestra.resumen || dataMuestra.grubbs?.resumen || []).map(p => ({
+                participante_num: p.num,
+                participante_nombre: p.nombre,
+                valores: p.valores || []
+            }));
+
+            const payload = {
+                num_muestra: dataMuestra.num_muestra || muestra,
+                metodo: dataMuestra.metodo || "ASTM D1121",
+                participantes: participantes
+            };
+
+            const response = await fetch('/exportar_pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Error al generar el reporte PDF.");
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Reporte_${muestra}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("❌ Error en descargarPDF:", error);
+            alert(`No se pudo descargar el PDF de la muestra ${muestra}: ${error.message}`);
+        }
+    }
+
+    async function descargarExcel(muestra) {
+        try {
+            const resMuestra = await fetch(`/obtener_muestra/${encodeURIComponent(muestra)}`);
+            if (!resMuestra.ok) throw new Error("No se encontraron los datos de la muestra.");
+
+            const dataMuestra = await resMuestra.json();
+            const participantes = (dataMuestra.resumen || dataMuestra.grubbs?.resumen || []).map(p => ({
+                participante_num: p.num,
+                participante_nombre: p.nombre,
+                valores: p.valores || []
+            }));
+
+            const payload = {
+                num_muestra: dataMuestra.num_muestra || muestra,
+                metodo: dataMuestra.metodo || "ASTM D1121",
+                participantes: participantes
+            };
+
+            const response = await fetch('/exportar_excel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error("Error al generar el archivo Excel.");
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Reporte_${muestra}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("❌ Error en descargarExcel:", error);
+            alert(`No se pudo descargar el Excel de la muestra ${muestra}: ${error.message}`);
+        }
+    }
+
+    async function eliminarRegistro(id) {
+        if (confirm("¿Estás seguro de eliminar esta muestra del historial?")) {
+            try {
+                const respuesta = await fetch(`/eliminar_registro/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!respuesta.ok) {
+                    throw new Error("No se pudo eliminar de la base de datos.");
+                }
+
+                registrosLocales = registrosLocales.filter(r => r.id !== id);
+                filtrarTabla();
+
+                const toast = document.getElementById('status-toast');
+                if (toast) {
+                    toast.style.display = 'block';
+                    toast.innerText = '🗑️ Registro eliminado permanentemente.';
+                    setTimeout(() => { toast.style.display = 'none'; }, 3000);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error al eliminar el registro de la base de datos.");
+            }
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', cargarRegistros);
+</script>
+</body>
+</html>

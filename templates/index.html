@@ -1,0 +1,2369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pruebas de consistencia</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/static/logo2.png">
+    <style>
+        :root {
+            --slate-900: #0f172a;
+            --slate-800: #1e293b;
+            --slate-700: #334155;
+            --slate-600: #475569;
+            --slate-500: #64748b;
+            --slate-300: #cbd5e1;
+            --slate-200: #e2e8f0;
+            --slate-100: #f1f5f9;
+            --slate-50:  #f8fafc;
+
+            --brand-primary: #3B12FF;
+            --brand-hover: #1d4ed8;
+            --brand-cyan: #0891b2;
+
+            --status-pass-bg: #f0fdf4;
+            --status-pass-text: #166534;
+            --status-pass-border: #bbf7d0;
+
+            --status-warn-bg: #fffbeb;
+            --status-warn-text: #b45309;
+            --status-warn-border: #fef08a;
+
+            --status-fail-bg: #fef2f2;
+            --status-fail-text: #991b1b;
+            --status-fail-border: #fecaca;
+
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-sans); }
+
+        body {
+            background-color: #0b0f19;
+            color: var(--slate-800);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-shell {
+            display: flex;
+            width: 100%;
+            max-width: 1536px;
+            height: 94vh;
+            background: var(--slate-900);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+
+        .sidebar {
+            width: 260px;
+            background: #0f172a;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            color: var(--slate-100);
+            border-right: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1rem; letter-spacing: 0.5px; color: #fff; }
+        .brand-icon { width: 14px; height: 14px; background: var(--brand-cyan); border-radius: 3px; box-shadow: 0 0 10px var(--brand-cyan); }
+
+        .workspace-card {
+            background: rgba(255,255,255,0.03);
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            color: var(--slate-300);
+            margin-top: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+            /* Estilo del acordeón para las tablas */
+    .acordeon-header {
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        user-select: none;
+        list-style: none; /* Elimina la flecha por defecto del navegador */
+    }
+
+    .acordeon-header::-webkit-details-marker {
+        display: none; /* Elimina la flecha por defecto en Chrome/Safari */
+    }
+
+    .icono-desplegar {
+        font-size: 0.8rem;
+        transition: transform 0.3s ease;
+        color: #64748b;
+    }
+
+    /* Rotación de la flecha cuando está abierto */
+    details[open] .icono-desplegar {
+        transform: rotate(180deg);
+    }
+        .workspace-card strong { color: #fff; font-family: var(--font-mono); }
+
+        .nav-title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--slate-500); margin-bottom: 10px; font-weight: 700; }
+        .nav-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+        .nav-item a { display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: var(--slate-300); text-decoration: none; border-radius: 8px; font-size: 0.85rem; font-weight: 500; transition: all 0.15s ease; }
+        .nav-item.active a { background: rgba(255,255,255,0.08); color: #ffffff; font-weight: 600; border-left: 3px solid var(--brand-cyan); }
+
+        .user-profile { display: flex; align-items: center; gap: 10px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .avatar { width: 32px; height: 32px; border-radius: 6px; background: var(--slate-700); border: 1px solid var(--slate-600); }
+        .user-info .name { font-weight: 600; font-size: 0.8rem; color: #fff; }
+        .user-info .role { font-size: 0.7rem; color: var(--slate-400); font-family: var(--font-mono); }
+
+
+        .main-content {
+            flex: 1;
+            background: var(--slate-100);
+            border-radius: 12px;
+            margin: 6px;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .header-bar { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--slate-200); }
+        .header-bar h1 { font-size: 1.35rem; color: var(--slate-900); font-weight: 700; letter-spacing: -0.3px; }
+        .header-actions { display: flex; gap: 8px; }
+
+        .action-btn {
+            background: var(--slate-800);
+            color: #fff;
+            border: 1px solid var(--slate-700);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .action-btn:hover { background: var(--slate-900); }
+        .action-btn.secondary { background: var(--brand-primary); border-color: var(--brand-hover); }
+        .action-btn.secondary:hover { background: var(--brand-hover); }
+
+
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+        .metric-card {
+            background: #ffffff;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--slate-200);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.2s ease;
+        }
+        .metric-title { font-size: 0.75rem; font-weight: 600; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .metric-value { font-size: 1.3rem; font-weight: 700; font-family: var(--font-mono); color: var(--slate-900); }
+
+        .metric-card.status-pass { background-color: var(--status-pass-bg); border-color: var(--status-pass-border); }
+        .metric-card.status-pass .metric-value { color: var(--status-pass-text); }
+        .metric-card.status-warn { background-color: var(--status-warn-bg); border-color: var(--status-warn-border); }
+        .metric-card.status-warn .metric-value { color: var(--status-warn-text); }
+        .metric-card.status-fail { background-color: var(--status-fail-bg); border-color: var(--status-fail-border); }
+        .metric-card.status-fail .metric-value { color: var(--status-fail-text); }
+
+        .bento-card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--slate-200);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+        .card-header h2 { font-size: 1rem; color: var(--slate-900); font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+
+        .tabla-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid var(--slate-200); }
+        .tabla-3col { width: 100%; border-collapse: collapse; background: #ffffff; font-size: 0.85rem; }
+        .tabla-3col th { background: var(--slate-900); color: #ffffff; padding: 10px 12px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; border: none; text-transform: uppercase; }
+        .tabla-3col td { padding: 8px 12px; border-bottom: 1px solid var(--slate-200); vertical-align: middle; }
+        .tabla-3col tr:hover { background-color: var(--slate-50); }
+
+        .contenedor-valores { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .celda-medicion { width: 68px; height: 32px; border: 1px solid var(--slate-300); border-radius: 4px; text-align: center; font-family: var(--font-mono); font-size: 0.85rem; background: var(--slate-50); outline: none; transition: all 0.15s ease; }
+        .celda-medicion:focus { border-color: var(--brand-primary); background: #ffffff; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
+
+        .part-cell-wrapper { display: flex; align-items: center; gap: 8px; }
+        .part-num-fixed { font-weight: 700; color: var(--slate-900); font-family: var(--font-mono); min-width: 18px; }
+        .part-name-editable { outline: none; border-bottom: 1px dashed var(--slate-400); padding: 2px 4px; font-weight: 500; }
+        .part-name-editable:focus { background-color: #ffffff; box-shadow: 0 0 0 2px var(--brand-primary); border-bottom: none; border-radius: 4px; }
+
+
+        .tabla-astm { border-collapse: collapse; width: 100%; font-size: 0.82rem; background: #fff; }
+        .tabla-astm th, .tabla-astm td { border: 1px solid var(--slate-200); text-align: center; padding: 6px 10px; }
+        .tabla-astm th { background: var(--slate-900); color: var(--slate-100); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.5px; }
+
+        .tabla-resumen th { background-color: var(--slate-900); color: #ffffff; font-weight: 600; }
+        .tabla-resumen td { font-weight: 500; font-family: var(--font-mono); }
+        .tabla-resumen tr:nth-child(even) { background-color: var(--slate-50); }
+
+        .tabla-grubbs-eval { border-collapse: collapse; width: 100%; font-size: 0.82rem; background: #ffffff; }
+        .tabla-grubbs-eval th { background-color: var(--slate-900); color: #fff; font-weight: 600; padding: 10px 12px; text-align: center; font-size: 0.72rem; text-transform: uppercase; }
+        .tabla-grubbs-eval td { padding: 8px 12px; border-bottom: 1px solid var(--slate-200); text-align: center; color: var(--slate-800); font-family: var(--font-mono); }
+        .tabla-grubbs-eval tr:nth-child(even) { background-color: var(--slate-50); }
+
+        .badge { display: inline-block; padding: 3px 8px; font-size: 0.7rem; font-weight: 700; border-radius: 4px; font-family: var(--font-sans); text-transform: uppercase; }
+        .badge-success { background-color: var(--status-pass-bg); color: var(--status-pass-text); border: 1px solid var(--status-pass-border); }
+        .badge-warning { background-color: var(--status-warn-bg); color: var(--status-warn-text); border: 1px solid var(--status-warn-border); }
+        .badge-danger { background-color: var(--status-fail-bg); color: var(--status-fail-text); border: 1px solid var(--status-fail-border); }
+        .badge-secondary { background-color: var(--slate-100); color: var(--slate-500); border: 1px solid var(--slate-200); }
+
+        .tabla-critica th { background-color: var(--slate-900); color: #ffffff; font-size: 0.75rem; }
+        .tabla-critica td { font-size: 0.8rem; font-family: var(--font-mono); }
+
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        #status-toast { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 6px; background: var(--status-pass-bg); color: var(--status-pass-text); font-size: 0.82rem; font-weight: 600; border: 1px solid var(--status-pass-border); }
+
+@media print {
+    /* 1. FORZAR IMPRESIÓN DE COLORES Y FONDOS EXACTOS EN TODO EL DOCUMENTO */
+    *, *::before, *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+    }
+
+    /* 2. Ocultar interfaz no imprimible */
+    .sidebar,
+    .header-actions,
+    .action-btn,
+    #banner-inspeccion,
+    .acordeon-header .icono-desplegar,
+    #status-toast {
+        display: none !important;
+    }
+
+    @page {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+
+    body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+
+    .app-shell, .main-content {
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+        overflow: visible !important;
+    }
+
+    /* 3. Forzar despliegue de acordeones <details> */
+    details {
+        display: block !important;
+    }
+
+    details > *:not(summary) {
+        display: block !important;
+    }
+
+    summary.acordeon-header {
+        pointer-events: none;
+        padding-bottom: 6px;
+    }
+
+    /* 4. Prevenir recortes en tarjetas y tablas */
+    .bento-card {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        margin-bottom: 12px !important;
+        padding: 12px !important;
+        background: #ffffff !important;
+    }
+
+    .tabla-wrapper {
+        overflow: visible !important;
+        width: 100% !important;
+    }
+
+    table {
+        width: 100% !important;
+        page-break-inside: auto;
+        table-layout: auto;
+    }
+
+    tr {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    /* 5. REFRACTORIZACIÓN DE RESALTADO PARA VALORES CRÍTICOS / ATÍPICOS */
+    /* Asegura que los fondos rojos/ámbar y letras blancas se vean nítidos al imprimir */
+    td[style*="background-color"],
+    tr[style*="background-color"] td {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .badge-danger, .badge-warning, .badge-success {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        border: 1px solid #000000 !important; /* Borde adicional de alto contraste */
+    }
+
+    .tabla-astm th, .tabla-3col th, .tabla-grubbs-eval th {
+        background-color: #1e293b !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    input, select {
+        border: none !important;
+        background: transparent !important;
+        appearance: none;
+        -webkit-appearance: none;
+    }
+}
+    </style>
+</head>
+<body>
+
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div>
+                <div class="brand"><img src="/static/logo.png" alt="Logo LIMS" style="height: 32px; width: auto; object-fit: contain;"><span>Pruebas de consistencia LAB</span></div>
+                <div class="workspace-card">
+                    Módulo de Validación<br>
+                    <strong>ISO 5725-2</strong>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-title">Gestión de Calidad</div>
+                    <ul class="nav-list">
+                        <li class="nav-item active"><a href="/">📊 Consola Consistencia</a></li>
+                        <li class="nav-item"><a href="/registros">🧪 Registro de estudios</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="user-profile">
+                <div class="avatar"></div>
+                <div class="user-info">
+                    <div class="name">POWERED BY</div>
+                    <div class="role">JEMV</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <!-- BANNER INDICADOR DE REGISTRO HISTÓRICO -->
+            <div id="banner-inspeccion" style="display: none; background: var(--slate-800); border: 1px solid #3b82f6; border-left: 5px solid #2563eb; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.2rem;">🔎</span>
+                    <div>
+                        <strong style="color: #60a5fa; font-size: 0.85rem;">MODO INSPECCIÓN DE REGISTRO HISTÓRICO</strong>
+                        <p style="color: var(--slate-300); font-size: 0.78rem; margin: 0;">Visualizando muestra almacenada en SQLite. Todos los estadísticos y dictámenes están evaluados.</p>
+                    </div>
+                </div>
+                <span id="badge-registro-id" style="background: #2563eb; color: #fff; font-family: var(--font-mono); font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; font-weight: bold;">MUESTRA: -</span>
+            </div>
+
+            <div class="header-bar">
+                <h1>Pruebas de Consistencia</h1>
+                <div class="header-actions">
+                    <a href="/registros" class="action-btn" style="background: var(--slate-700); text-decoration: none;">⬅️ Volver a Registros</a>
+                    <button class="action-btn" style="background: var(--slate-700); border-color: var(--slate-600);" onclick="window.print()">🖨️ Imprimir Vista</button>
+                </div>
+            </div>
+
+            <!-- CAMPOS DE INGRESO DE DATOS (N° DE LOTE, METODO, N°CELDAS -->
+            <div class="bento-card">
+                <div class="card-header">
+                    <h2>Configuración de la prueba</h2>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 16px;">
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">N° de lote:</label>
+                        <input type="text" id="input-num-muestra" value="" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--slate-300); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 4px;">
+                    </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <label style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Método:</label>
+                            <button type="button" onclick="agregarNuevoMetodoPrompt()" style="background: none; border: none; color: #2563eb; font-size: 0.75rem; font-weight: bold; cursor: pointer;">+ Nuevo</button>
+                            <button type="button" onclick="quitarMetodo()" style="background: none; border: none; color: #F50000; font-size: 0.75rem; font-weight: bold; cursor: pointer;">- Borrar</button>
+                        </div>
+
+                        <select id="select-metodo" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--slate-300); font-size: 0.85rem; margin-top: 4px; background: #fff;">
+
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">N° de Celdas Base:</label>
+                        <input type="number" id="input-num-celdas" value="5" min="1" max="15" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--slate-300); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 4px; text-align: center;" onchange="actualizarCeldasExistentes()">
+                    </div>
+
+                </div>
+                <div>
+                        <label style="font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase;">Observaciones:</label>
+                        <input type="text" id="input-observaciones" value="" style="width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--slate-300); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 4px;">
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; border-top: 1px solid var(--slate-200); padding-top: 14px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button id="btn-limpiar" class="action-btn" style="background: #ef4444; border-color: #dc2626;" onclick="limpiarConsola()">🗑️ Limpiar Consola</button>
+                        <button id="btn-eliminar-registro" class="action-btn" style="background: #7f1d1d; border-color: #ef4444; color: #fca5a5; display: none;" onclick="borrarRegistroActual()">❌ Eliminar Registro</button>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button id="btn-agregar-lab" class="action-btn secondary" onclick="agregarParticipante()">➕ Agregar Lab</button>
+                        <button id="btn-calcular" class="action-btn" style="background:#13D44F; border-color: #4eb302; color: #0f172a; font-weight: 700;" onclick="guardarTabla()"> Calcular</button>
+                        <button id="btn-guardar-db" class="action-btn" style="background: var(--brand-cyan); border-color: var(--brand-cyan); display: none;" onclick="guardarAvanzadoDB()">💾 Guardar datos</button>
+                        <button id="btn-pdf" class="action-btn" style="background: #7c3aed; border-color: #6d28d9; display: none;" onclick="exportarPDF()">📄 Reporte PDF</button>
+                        <button id="btn-editar-datos" class="action-btn" style="background: #059669; border-color: #047857;" onclick="habilitarEdicionConsola()">✏️ Editar datos</button>
+                    </div>
+                </div>
+
+
+
+            <!-- TARJETAS DE EVALUACIÓN DE PRUEBAS -->
+            <div class="metrics-grid" id="contenedor-tarjetas-evaluacion">
+                <div class="metric-card" id="card-mandel">
+                    <div class="metric-title">Mandel (h & k)</div>
+                    <div class="metric-value" id="val-mandel">Sin evaluar</div>
+                    <small id="sub-mandel" style="font-size: 0.72rem; color: var(--slate-500);">Esperando datos...</small>
+                </div>
+
+                <div class="metric-card" id="card-cochran">
+                    <div class="metric-title">Cochran (C)</div>
+                    <div class="metric-value" id="val-cochran">Sin evaluar</div>
+                    <small id="sub-cochran" style="font-size: 0.72rem; color: var(--slate-500);">Esperando datos...</small>
+                </div>
+
+                <div class="metric-card" id="card-grubbs">
+                    <div class="metric-title">Grubbs</div>
+                    <div class="metric-value" id="val-grubbs">Sin evaluar</div>
+                    <small id="sub-grubbs" style="font-size: 0.72rem; color: var(--slate-500);">Esperando datos...</small>
+                </div>
+                <div class="metric-card" id="card-porcr">
+                    <div class="metric-title">% R </div>
+                    <div class="metric-value" id="porc_R2">Sin evaluar</div>
+                </div>
+            </div>
+
+            <!-- TABLA DE INGRESO DE DATOS-->
+            <div class="bento-card">
+                <div class="card-header"><h2>🧪 Captura de Mediciones (ingresar datos de los ensayos)</h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-3col">
+                        <thead>
+                            <tr>
+                                <th style="width: 220px; text-align: left;">PARTICIPANTE</th>
+                                <th style="text-align: left;">VALORES / MEDICIONES</th>
+                                <th style="width: 180px; text-align: center;">ACCIÓN</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-body">
+                            <!-- Se llena dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="status-toast"></div>
+            </div>
+
+            <!-- GRAFICA DISPERSION -->
+            <div class="bento-card">
+                <div class="card-header"><h2>📈 Dispersión de Mediciones Individuales</h2></div>
+                <div class="chart-container"><canvas id="scatterChart"></canvas></div>
+            </div>
+
+            <!-- TABLA RESUMEN -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Resumen Estadístico por Participante</h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr><th>N° Participante</th><th>Nombre</th><th>N° Registros</th><th>Promedio</th><th>Producto</th></tr>
+                        </thead>
+                        <tbody id="tabla-resumen-body"><tr><td colspan="5" style="color: var(--slate-500);">Ingresa participantes y procesa.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- METRICAS GLOBALES -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Parámetros Estadísticos Globales</h2></div>
+                <div class="metrics-grid">
+                    <div class="metric-card"><div class="metric-title">Suma Productos</div><div class="metric-value" id="calc-suma-productos">-</div></div>
+                    <div class="metric-card"><div class="metric-title">Varianza</div><div class="metric-value" id="calc-varianza">-</div></div>
+                    <div class="metric-card"><div class="metric-title">Gran Promedio (X̄)</div><div class="metric-value" id="calc-gran-promedio">-</div></div>
+                    <div class="metric-card"><div class="metric-title">Mín / Máx</div><div class="metric-value" id="calc-min-max">- / -</div></div>
+                    <div class="metric-card"><div class="metric-title">Desviación (σ)</div><div class="metric-value" id="calc-desviacion">-</div></div>
+                    <div class="metric-card"><div class="metric-title">nj (σ²)</div><div class="metric-value" id="calc-formula1">-</div></div>
+                </div>
+            </div>
+
+            <!-- TABLA DESVIACION -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Desviación Estándar </h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr><th>N° Participante</th><th>Nombre</th><th>N° Registros</th><th>Promedio</th><th>Desviación (s)</th></tr>
+                        </thead>
+                        <tbody id="tabla-desviacion-body"><tr><td colspan="5" style="color: var(--slate-500);">Sin datos.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- FORMULAS COCHRAN -->
+            <div class="bento-card">
+                <div class="card-header"><h2>📐 Variabilidad Intralaboratorio (Cochran)</h2></div>
+                <div class="metrics-grid">
+                    <div class="metric-card"><div class="metric-title">Σ s²<sub>ij</sub></div><div class="metric-value" id="calc-suma-varianzas">-</div></div>
+                    <div class="metric-card"><div class="metric-title">√(Σ s²<sub>ij</sub>)</div><div class="metric-value" id="calc-raiz-suma-varianzas">-</div></div>
+                    <div class="metric-card"><div class="metric-title">Prom. Desviaciones</div><div class="metric-value" id="calc-promedio-desviaciones">-</div></div>
+                    <div class="metric-card" style="background: var(--slate-800); color: #fff;"><div class="metric-title" style="color: var(--slate-300);">Estadístico Cochran (C)</div><div class="metric-value" id="calc-cochran" style="color: #fff;">-</div></div>
+                </div>
+            </div>
+
+            <!-- TABLA DIFERENCIAS -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Diferencias respecto al Gran Promedio</h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr><th>N° Participante</th><th>Nombre</th><th>Promedio (X̄<sub>i</sub>)</th><th>Diferencia</th></tr>
+                        </thead>
+                        <tbody id="tabla-diferencias-body"><tr><td colspan="4" style="color: var(--slate-500);">Sin datos.</td></tr></tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 12px;">
+                    <div class="metric-card" style="max-width: 320px; background: var(--slate-900); color: #fff;">
+                        <div class="metric-title" style="color: var(--slate-400);">Desviación Estándar Diferencias</div>
+                        <div class="metric-value" id="calc-desviacion-diferencias" style="color: #fff;">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLA PONDERADA AL CUADRADO -->
+            <div class="bento-card">
+                <div class="card-header">
+                    <h2>Ponderación Cuadrática: n<sub>i</sub> × (X̄<sub>i</sub> - X̄<sub>global</sub>)<sup>2</sup></h2>
+                </div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr><th>N° Participante</th><th>Nombre</th><th>N° Mediciones</th><th>Diferencia</th><th>Ponderación</th></tr>
+                        </thead>
+                        <tbody id="tabla-ponderada-body">
+                            <tr><td colspan="5" style="color: var(--slate-500);">Sin datos.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="bento-card" style="margin-top: 14px;">
+                    <div class="card-header"><h2>Parámetros Repetibilidad  y Reproducibilidad </h2></div>
+                    <div class="metrics-grid">
+                        <div class="metric-card"><div class="metric-title">Suma</div><div class="metric-value" id="calc-suma-ponderada">-</div></div>
+                        <div class="metric-card"><div class="metric-title">s<sub>d_j</sub><sup>2</sup></div><div class="metric-value" id="s2dj">-</div></div>
+                        <div class="metric-card"><div class="metric-title">nj (σ²)</div><div class="metric-value" id="calc-formula2">-</div></div>
+                          <div class="metric-card" style="background: var(--slate-800); color: #fff;"><div class="metric-title" style="color: var(--slate-300);">mj</div><div class="metric-value" id="calc-mj" style="color: #fff;">-</div></div>
+                        <div class="metric-card"><div class="metric-title">s2r</div><div class="metric-value" id="sr2j">-</div></div>
+                        <div class="metric-card"><div class="metric-title">s<sub>Lj</sub><sup>2</sup></div><div class="metric-value" id="s2lj">-</div></div>
+                        <div class="metric-card"><div class="metric-title">Sr / Sl</div><div class="metric-value" id="sr_sl">-</div></div>
+                        <div class="metric-card"><div class="metric-title">Raíz Sr / Sl</div><div class="metric-value" id="raiz_sr_sl">-</div></div>
+                         <div class="metric-card" style="background: var(--slate-800); color: #fff;"><div class="metric-title" style="color: var(--slate-300);">SR</div><div class="metric-value" id="raiz_srj" style="color: #fff;">-</div></div>
+                        <div class="metric-card"><div class="metric-title">srj2</div><div class="metric-value" id="srj2">-</div></div>
+                        <div class="metric-card"><div class="metric-title">% R</div><div class="metric-value" id="porc_R">-</div></div>
+                        <div class="metric-card" style="background: var(--slate-800); color: #fff;"><div class="metric-title" style="color: var(--slate-300);">s<sub>Rj</sub><sup>2</sup> = s<sub>rj</sub><sup>2</sup> + s<sub>Lj</sub><sup>2</sup></div><div class="metric-value" id="suma_s2rj" style="color:#fff;">-</div></div>
+                    </div>
+                </div>
+            </div>
+            <!-- TABLA RESUMEN -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Valores calculados</h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr><th>N° Participante</th><th>Mj</th><th>Sr</th><th>SRj</th></tr>
+                        </thead>
+                        <tbody id="tabla-resumen-body4"><tr><td colspan="4" style="color: var(--slate-500);">Ingresa participantes y procesa.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TABLA ESTADÍSTICO k -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Estadístico de Mandel K (Variabilidad Intralaboratorio)</h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm">
+                        <thead>
+                            <tr>
+                                <th class="participante-hdr">Participante</th>
+                                <th class="nivel-hdr">Valor k<sub>ij</sub></th>
+                                <th>¿Cumple? ( k ≤ k<sub>crit</sub> )</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-k-body"><tr><td colspan="3" style="color: var(--slate-500);">Sin datos.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- GRAFICA MANDEL K -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Consistencia Gráfica (Estadístico Mandel k)</h2></div>
+                <div class="chart-container"><canvas id="mandelKChart"></canvas></div>
+            </div>
+
+            <!-- TABLA DE VALORES CRÍTICOS MANDEL -->
+              <div class="bento-card">
+                <details class="acordeon-tabla">
+                    <summary class="card-header acordeon-header">
+                        <h2>Tabla de valores criticos Mandel H y K</h2>
+                        <span class="icono-desplegar">▼</span>
+                    </summary>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-critica" id="tabla-mandel-referencia">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">p</th>
+                                <th rowspan="2" style="background:#dc2626;">h</th>
+                                <th colspan="9">k (según número de replicados n)</th>
+                            </tr>
+                            <tr>
+                                <th data-n="2">2</th><th data-n="3">3</th><th data-n="4">4</th><th data-n="5">5</th><th data-n="6">6</th><th data-n="7">7</th><th data-n="8">8</th><th data-n="9">9</th><th data-n="10">10</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <tr data-p="3"><td>3</td><td>1.15</td><td>1.65</td><td>1.53</td><td>1.45</td><td>1.40</td><td>1.37</td><td>1.34</td><td>1.32</td><td>1.30</td><td>1.29</td></tr>
+                        <tr data-p="4"><td>4</td><td>1.42</td><td>1.76</td><td>1.59</td><td>1.50</td><td>1.44</td><td>1.40</td><td>1.37</td><td>1.35</td><td>1.33</td><td>1.31</td></tr>
+                        <tr data-p="5"><td>5</td><td>1.57</td><td>1.81</td><td>1.62</td><td>1.53</td><td>1.46</td><td>1.42</td><td>1.39</td><td>1.36</td><td>1.34</td><td>1.32</td></tr>
+                        <tr data-p="6"><td>6</td><td>1.66</td><td>1.85</td><td>1.64</td><td>1.54</td><td>1.48</td><td>1.43</td><td>1.40</td><td>1.37</td><td>1.35</td><td>1.33</td></tr>
+                        <tr data-p="7"><td>7</td><td>1.71</td><td>1.87</td><td>1.66</td><td>1.55</td><td>1.49</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td><td>1.34</td></tr>
+                        <tr data-p="8"><td>8</td><td>1.75</td><td>1.88</td><td>1.67</td><td>1.56</td><td>1.50</td><td>1.45</td><td>1.41</td><td>1.38</td><td>1.36</td><td>1.34</td></tr>
+                        <tr data-p="9"><td>9</td><td>1.78</td><td>1.90</td><td>1.68</td><td>1.57</td><td>1.50</td><td>1.45</td><td>1.42</td><td>1.39</td><td>1.36</td><td>1.35</td></tr>
+                        <tr data-p="10"><td>10</td><td>1.80</td><td>1.90</td><td>1.68</td><td>1.57</td><td>1.50</td><td>1.46</td><td>1.42</td><td>1.39</td><td>1.37</td><td>1.35</td></tr>
+                        <tr data-p="11"><td>11</td><td>1.82</td><td>1.91</td><td>1.69</td><td>1.58</td><td>1.51</td><td>1.46</td><td>1.42</td><td>1.39</td><td>1.37</td><td>1.35</td></tr>
+                        <tr data-p="12"><td>12</td><td>1.83</td><td>1.92</td><td>1.69</td><td>1.58</td><td>1.51</td><td>1.46</td><td>1.42</td><td>1.40</td><td>1.37</td><td>1.35</td></tr>
+                        <tr data-p="13"><td>13</td><td>1.84</td><td>1.92</td><td>1.69</td><td>1.58</td><td>1.51</td><td>1.46</td><td>1.43</td><td>1.40</td><td>1.37</td><td>1.35</td></tr>
+                        <tr data-p="14"><td>14</td><td>1.85</td><td>1.92</td><td>1.70</td><td>1.59</td><td>1.52</td><td>1.47</td><td>1.43</td><td>1.40</td><td>1.37</td><td>1.35</td></tr>
+                        <tr data-p="15"><td>15</td><td>1.86</td><td>1.93</td><td>1.70</td><td>1.59</td><td>1.52</td><td>1.47</td><td>1.43</td><td>1.40</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="16"><td>16</td><td>1.86</td><td>1.93</td><td>1.70</td><td>1.59</td><td>1.52</td><td>1.47</td><td>1.43</td><td>1.40</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="17"><td>17</td><td>1.87</td><td>1.93</td><td>1.70</td><td>1.59</td><td>1.52</td><td>1.47</td><td>1.43</td><td>1.40</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="18"><td>18</td><td>1.88</td><td>1.93</td><td>1.71</td><td>1.59</td><td>1.52</td><td>1.47</td><td>1.43</td><td>1.40</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="19"><td>19</td><td>1.88</td><td>1.93</td><td>1.71</td><td>1.59</td><td>1.52</td><td>1.47</td><td>1.43</td><td>1.40</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="20"><td>20</td><td>1.89</td><td>1.94</td><td>1.71</td><td>1.59</td><td>1.52</td><td>1.47</td><td>1.43</td><td>1.40</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="21"><td>21</td><td>1.89</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.52</td><td>1.47</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="22"><td>22</td><td>1.89</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.52</td><td>1.47</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="23"><td>23</td><td>1.90</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.53</td><td>1.47</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="24"><td>24</td><td>1.90</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.53</td><td>1.48</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="25"><td>25</td><td>1.90</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.53</td><td>1.48</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="26"><td>26</td><td>1.90</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.53</td><td>1.48</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="27"><td>27</td><td>1.91</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.53</td><td>1.48</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="28"><td>28</td><td>1.91</td><td>1.94</td><td>1.71</td><td>1.60</td><td>1.53</td><td>1.48</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="29"><td>29</td><td>1.91</td><td>1.94</td><td>1.72</td><td>1.60</td><td>1.53</td><td>1.48</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                        <tr data-p="30"><td>30</td><td>1.91</td><td>1.94</td><td>1.72</td><td>1.60</td><td>1.53</td><td>1.48</td><td>1.44</td><td>1.41</td><td>1.38</td><td>1.36</td></tr>
+                    </tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+
+            <!-- TABLA ESTADÍSTICO h DE MANDEL -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Estadístico de Mandel h (Variabilidad Interlaboratorio)</h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr>
+                                <th>N° Participante</th>
+                                <th>Nombre</th>
+                                <th>N° Registros</th>
+                                <th>Promedio</th>
+                                <th>h<sub>ij</sub></th>
+                                <th>¿Cumple? ( |h| ≤ h<sub>crit</sub> )</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-desviacion-body2"><tr><td colspan="6" style="color: var(--slate-500);">Sin datos.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- GRAFICA MANDEL H -->
+            <div class="bento-card">
+                <div class="card-header"><h2>Consistencia Gráfica (Estadístico Mandel h)</h2></div>
+                <div class="chart-container"><canvas id="mandelHChart"></canvas></div>
+            </div>
+
+
+
+            <!-- TABLA 4 — VALORES CRÍTICOS DE COCHRAN -->
+              <div class="bento-card">
+                <details class="acordeon-tabla">
+                    <summary class="card-header acordeon-header">
+                        <h2>Tabla corchan</h2>
+                        <span class="icono-desplegar">▼</span>
+                    </summary>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-critica" id="tabla-cochran-referencia">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="vertical-align: middle;">p</th>
+                                <th colspan="2">n = 2</th>
+                                <th colspan="2">n = 3</th>
+                                <th colspan="2">n = 4</th>
+                                <th colspan="2">n = 5</th>
+                                <th colspan="2">n = 6</th>
+                            </tr>
+                            <tr>
+                                <th data-n="2" data-alpha="1">1%</th><th data-n="2" data-alpha="5">5%</th>
+                                <th data-n="3" data-alpha="1">1%</th><th data-n="3" data-alpha="5">5%</th>
+                                <th data-n="4" data-alpha="1">1%</th><th data-n="4" data-alpha="5">5%</th>
+                                <th data-n="5" data-alpha="1">1%</th><th data-n="5" data-alpha="5">5%</th>
+                                <th data-n="6" data-alpha="1">1%</th><th data-n="6" data-alpha="5">5%</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                           <tr data-p="2"><td>2</td><td>-</td><td>-</td><td>0,995</td><td>0,975</td><td>0,979</td><td>0,939</td><td>0,959</td><td>0,906</td><td>0,937</td><td>0,877</td></tr>
+                            <tr data-p="3"><td>3</td><td>0,993</td><td>0,967</td><td>0,942</td><td>0,871</td><td>0,883</td><td>0,798</td><td>0,834</td><td>0,746</td><td>0,793</td><td>0,707</td></tr>
+                            <tr data-p="4"><td>4</td><td>0,968</td><td>0,906</td><td>0,864</td><td>0,768</td><td>0,781</td><td>0,684</td><td>0,721</td><td>0,629</td><td>0,676</td><td>0,590</td></tr>
+                            <tr data-p="5"><td>5</td><td>0,928</td><td>0,841</td><td>0,788</td><td>0,684</td><td>0,696</td><td>0,598</td><td>0,633</td><td>0,544</td><td>0,588</td><td>0,506</td></tr>
+                            <tr data-p="6"><td>6</td><td>0,883</td><td>0,781</td><td>0,722</td><td>0,616</td><td>0,626</td><td>0,532</td><td>0,564</td><td>0,480</td><td>0,520</td><td>0,445</td></tr>
+                            <tr data-p="7"><td>7</td><td>0,838</td><td>0,727</td><td>0,664</td><td>0,561</td><td>0,568</td><td>0,480</td><td>0,508</td><td>0,431</td><td>0,466</td><td>0,397</td></tr>
+                            <tr data-p="8"><td>8</td><td>0,794</td><td>0,680</td><td>0,615</td><td>0,516</td><td>0,521</td><td>0,438</td><td>0,463</td><td>0,391</td><td>0,423</td><td>0,360</td></tr>
+                            <tr data-p="9"><td>9</td><td>0,754</td><td>0,638</td><td>0,573</td><td>0,478</td><td>0,481</td><td>0,403</td><td>0,425</td><td>0,358</td><td>0,387</td><td>0,329</td></tr>
+                            <tr data-p="10"><td>10</td><td>0,718</td><td>0,602</td><td>0,536</td><td>0,445</td><td>0,447</td><td>0,373</td><td>0,393</td><td>0,331</td><td>0,357</td><td>0,303</td></tr>
+                            <tr data-p="11"><td>11</td><td>0,684</td><td>0,570</td><td>0,504</td><td>0,417</td><td>0,418</td><td>0,348</td><td>0,366</td><td>0,308</td><td>0,332</td><td>0,281</td></tr>
+                            <tr data-p="12"><td>12</td><td>0,653</td><td>0,541</td><td>0,475</td><td>0,392</td><td>0,392</td><td>0,326</td><td>0,343</td><td>0,288</td><td>0,310</td><td>0,262</td></tr>
+                            <tr data-p="13"><td>13</td><td>0,624</td><td>0,515</td><td>0,450</td><td>0,371</td><td>0,369</td><td>0,307</td><td>0,322</td><td>0,271</td><td>0,291</td><td>0,243</td></tr>
+                            <tr data-p="14"><td>14</td><td>0,599</td><td>0,492</td><td>0,427</td><td>0,352</td><td>0,349</td><td>0,291</td><td>0,304</td><td>0,255</td><td>0,274</td><td>0,232</td></tr>
+                            <tr data-p="15"><td>15</td><td>0,575</td><td>0,471</td><td>0,407</td><td>0,335</td><td>0,332</td><td>0,276</td><td>0,288</td><td>0,242</td><td>0,259</td><td>0,220</td></tr>
+                            <tr data-p="16"><td>16</td><td>0,553</td><td>0,452</td><td>0,388</td><td>0,319</td><td>0,316</td><td>0,262</td><td>0,274</td><td>0,230</td><td>0,246</td><td>0,208</td></tr>
+                            <tr data-p="17"><td>17</td><td>0,532</td><td>0,434</td><td>0,372</td><td>0,305</td><td>0,301</td><td>0,250</td><td>0,261</td><td>0,219</td><td>0,234</td><td>0,198</td></tr>
+                            <tr data-p="18"><td>18</td><td>0,514</td><td>0,418</td><td>0,356</td><td>0,293</td><td>0,288</td><td>0,240</td><td>0,249</td><td>0,209</td><td>0,223</td><td>0,189</td></tr>
+                            <tr data-p="19"><td>19</td><td>0,496</td><td>0,403</td><td>0,343</td><td>0,281</td><td>0,276</td><td>0,230</td><td>0,238</td><td>0,200</td><td>0,214</td><td>0,181</td></tr>
+                            <tr data-p="20"><td>20</td><td>0,480</td><td>0,389</td><td>0,330</td><td>0,270</td><td>0,265</td><td>0,220</td><td>0,229</td><td>0,192</td><td>0,205</td><td>0,174</td></tr>
+                            <tr data-p="21"><td>21</td><td>0,465</td><td>0,377</td><td>0,318</td><td>0,261</td><td>0,255</td><td>0,212</td><td>0,220</td><td>0,185</td><td>0,197</td><td>0,167</td></tr>
+                            <tr data-p="22"><td>22</td><td>0,450</td><td>0,365</td><td>0,307</td><td>0,252</td><td>0,246</td><td>0,204</td><td>0,212</td><td>0,178</td><td>0,189</td><td>0,160</td></tr>
+                            <tr data-p="23"><td>23</td><td>0,437</td><td>0,354</td><td>0,297</td><td>0,243</td><td>0,238</td><td>0,197</td><td>0,204</td><td>0,172</td><td>0,182</td><td>0,155</td></tr>
+                            <tr data-p="24"><td>24</td><td>0,425</td><td>0,343</td><td>0,287</td><td>0,235</td><td>0,230</td><td>0,191</td><td>0,197</td><td>0,166</td><td>0,176</td><td>0,149</td></tr>
+                            <tr data-p="25"><td>25</td><td>0,413</td><td>0,334</td><td>0,278</td><td>0,228</td><td>0,222</td><td>0,185</td><td>0,190</td><td>0,160</td><td>0,170</td><td>0,144</td></tr>
+                            <tr data-p="26"><td>26</td><td>0,402</td><td>0,325</td><td>0,270</td><td>0,221</td><td>0,215</td><td>0,179</td><td>0,184</td><td>0,155</td><td>0,164</td><td>0,140</td></tr>
+                            <tr data-p="27"><td>27</td><td>0,391</td><td>0,316</td><td>0,262</td><td>0,215</td><td>0,209</td><td>0,173</td><td>0,179</td><td>0,150</td><td>0,159</td><td>0,135</td></tr>
+                            <tr data-p="28"><td>28</td><td>0,382</td><td>0,308</td><td>0,255</td><td>0,209</td><td>0,202</td><td>0,168</td><td>0,173</td><td>0,146</td><td>0,154</td><td>0,131</td></tr>
+                            <tr data-p="29"><td>29</td><td>0,372</td><td>0,300</td><td>0,248</td><td>0,203</td><td>0,196</td><td>0,164</td><td>0,168</td><td>0,142</td><td>0,150</td><td>0,127</td></tr>
+                            <tr data-p="30"><td>30</td><td>0,363</td><td>0,293</td><td>0,241</td><td>0,198</td><td>0,191</td><td>0,159</td><td>0,164</td><td>0,138</td><td>0,145</td><td>0,124</td></tr>
+                            <tr data-p="31"><td>31</td><td>0,355</td><td>0,286</td><td>0,235</td><td>0,193</td><td>0,186</td><td>0,155</td><td>0,159</td><td>0,134</td><td>0,141</td><td>0,120</td></tr>
+                            <tr data-p="32"><td>32</td><td>0,347</td><td>0,280</td><td>0,229</td><td>0,188</td><td>0,181</td><td>0,151</td><td>0,155</td><td>0,131</td><td>0,138</td><td>0,117</td></tr>
+                            <tr data-p="33"><td>33</td><td>0,339</td><td>0,273</td><td>0,224</td><td>0,184</td><td>0,177</td><td>0,147</td><td>0,151</td><td>0,127</td><td>0,134</td><td>0,114</td></tr>
+                            <tr data-p="34"><td>34</td><td>0,332</td><td>0,267</td><td>0,218</td><td>0,179</td><td>0,172</td><td>0,144</td><td>0,147</td><td>0,124</td><td>0,131</td><td>0,111</td></tr>
+                         </tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+
+
+
+            <div class="bento-card">
+                <div class="card-header">
+                    <h2>Evaluación Dictamen Cochran (Varianza Máxima)</h2>
+                </div>
+
+                <div class="tabla-wrapper" style="max-width: 380px; margin-bottom: 16px;">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr>
+                                <th id="cochran-header-c1">C₁ Calculado = -</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Límite Crítico 5%</strong> <span id="cochran-val-5" style="float: right;">-</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Límite Crítico 1%</strong> <span id="cochran-val-1" style="float: right;">-</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <div class="metric-card" style="min-width: 200px;">
+                        <div class="metric-title">Criterio Conformidad</div>
+                        <div class="metric-value" id="cochran-criterio" style="font-size: 1rem;">C₁ &lt; -</div>
+                    </div>
+
+                    <div class="metric-card" id="cochran-status-card" style="min-width: 220px; background: var(--slate-100);">
+                        <div class="metric-title">Dictamen Prueba</div>
+                        <div class="metric-value" id="cochran-resultado">-</div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="bento-card">
+                <div class="card-header"><h2>Tabla Resumen Grubbs (Ordenada)</h2></div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-astm tabla-resumen">
+                        <thead>
+                            <tr><th>N° Participante</th><th>Nombre</th><th>Promedio (Ordenado)</th></tr>
+                        </thead>
+                        <tbody id="tabla-resumen-body3"><tr><td colspan="3" style="color: var(--slate-500);">Ingresa participantes y presiona procesar.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bento-card" style="margin-top: 14px;">
+                <div class="card-header"><h2>Cálculo de Parámetros Repetibilidad y Reproducibilidad</h2></div>
+                <div class="metrics-grid">
+                    <div class="metric-card"><div class="metric-title">𝑠=√(1/(𝑝−1) ∑_(𝑖=1)^𝑝(𝑥_𝑖−𝑥 ̅ )^2 )</div><div class="metric-value" id="desv_prom">-</div></div>
+                    <div class="metric-card"><div class="metric-title">Gran Promedio (X̄)</div><div class="metric-value" id="calc-gran-promedio2">-</div></div>
+                    <div class="metric-card"><div class="metric-title">s2o)</div><div class="metric-value" id="s2o">-</div></div>
+                    <div class="metric-card"><div class="metric-title">xp_1p</div><div class="metric-value" id="xp_1p">-</div></div>
+                    <div class="metric-card"><div class="metric-title">s2p=</div><div class="metric-value" id="s2p">-</div></div>
+                    <div class="metric-card"><div class="metric-title">Gp=</div><div class="metric-value" id="Gp">-</div></div>
+                    <div class="metric-card"><div class="metric-title">Gp min=</div><div class="metric-value" id="Gpmin">-</div></div>
+                    <div class="metric-card"><div class="metric-title">X1_2=</div><div class="metric-value" id="x1_2">-</div></div>
+                    <div class="metric-card"><div class="metric-title">s1,2_2=</div><div class="metric-value" id="s12_2">-</div></div>
+                    <div class="metric-card"><div class="metric-title">G doble min=</div><div class="metric-value" id="G2">-</div></div>
+                    <div class="metric-card"><div class="metric-title">G doble max=</div><div class="metric-value" id="G">-</div></div>
+                </div>
+            </div>
+
+            <div class="bento-card">
+                <div class="card-header">
+                    <h2>Evaluación Completa de Outliers (Test de Grubbs)</h2>
+                </div>
+                <div class="tabla-wrapper">
+                    <table class="tabla-grubbs-eval">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Caso Evaluado</th>
+                                <th>Estadístico G Calculado</th>
+                                <th>Crítico (5%)</th>
+                                <th>Crítico (1%)</th>
+                                <th>Dictamen</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-grubbs-evaluacion-body">
+                            <!-- Se llena auto-->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bento-card">
+                <details class="acordeon-tabla">
+                    <summary class="card-header acordeon-header">
+                        <h2>Valores Críticos Referenciales para Test de Grubbs</h2>
+                        <span class="icono-desplegar">▼</span>
+                    </summary>
+
+                    <div class="tabla-wrapper" style="margin-top: 15px;">
+                        <table class="tabla-astm tabla-critica" id="tabla-grubbs-referencia">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2" style="vertical-align: middle;">p</th>
+                                    <th colspan="2">Un Extremo (G max / G min)</th>
+                                    <th colspan="2">Dos Extremos (G2 high / G2 low)</th>
+                                </tr>
+                                <tr>
+                                    <th data-n="2" data-alpha="1">Superior a 1%</th>
+                                    <th data-n="2" data-alpha="5">Superior a 5%</th>
+                                    <th data-n="3" data-alpha="1">Inferior a 1%</th>
+                                    <th data-n="3" data-alpha="5">Inferior a 5%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr data-p="3"><td>3</td><td>1,155</td><td>1,155</td><td>-</td><td>-</td></tr>
+                                <tr data-p="4"><td>4</td><td>1,496</td><td>1,481</td><td>0,000 0</td><td>0,000 2</td></tr>
+                                <tr data-p="5"><td>5</td><td>1,764</td><td>1,715</td><td>0,001 8</td><td>0,009 0</td></tr>
+                                <tr data-p="6"><td>6</td><td>1,973</td><td>1,887</td><td>0,011 6</td><td>0,034 9</td></tr>
+                                <tr data-p="7"><td>7</td><td>2,139</td><td>2,020</td><td>0,030 8</td><td>0,070 8</td></tr>
+                                <tr data-p="8"><td>8</td><td>2,274</td><td>2,126</td><td>0,056 3</td><td>0,110 1</td></tr>
+                                <tr data-p="9"><td>9</td><td>2,387</td><td>2,215</td><td>0,085 1</td><td>0,149 2</td></tr>
+                                <tr data-p="10"><td>10</td><td>2,482</td><td>2,290</td><td>0,115 0</td><td>0,186 4</td></tr>
+                                <tr data-p="11"><td>11</td><td>2,564</td><td>2,355</td><td>0,144 8</td><td>0,221 3</td></tr>
+                                <tr data-p="12"><td>12</td><td>2,636</td><td>2,412</td><td>0,173 8</td><td>0,253 7</td></tr>
+                                <tr data-p="13"><td>13</td><td>2,699</td><td>2,462</td><td>0,201 6</td><td>0,283 6</td></tr>
+                                <tr data-p="14"><td>14</td><td>2,755</td><td>2,507</td><td>0,228 0</td><td>0,311 2</td></tr>
+                                <tr data-p="15"><td>15</td><td>2,806</td><td>2,549</td><td>0,253 0</td><td>0,336 7</td></tr>
+                                <tr data-p="16"><td>16</td><td>2,852</td><td>2,585</td><td>0,276 7</td><td>0,360 3</td></tr>
+                                <tr data-p="17"><td>17</td><td>2,894</td><td>2,620</td><td>0,299 0</td><td>0,382 2</td></tr>
+                                <tr data-p="18"><td>18</td><td>2,932</td><td>2,651</td><td>0,320 0</td><td>0,402 5</td></tr>
+                                <tr data-p="19"><td>19</td><td>2,968</td><td>2,681</td><td>0,339 8</td><td>0,421 4</td></tr>
+                                <tr data-p="20"><td>20</td><td>3,001</td><td>2,709</td><td>0,358 5</td><td>0,439 1</td></tr>
+                                <tr data-p="21"><td>21</td><td>3,031</td><td>2,733</td><td>0,376 1</td><td>0,455 6</td></tr>
+                                <tr data-p="22"><td>22</td><td>3,060</td><td>2,756</td><td>0,392 7</td><td>0,471 1</td></tr>
+                                <tr data-p="23"><td>23</td><td>3,087</td><td>2,777</td><td>0,408 5</td><td>0,485 7</td></tr>
+                                <tr data-p="24"><td>24</td><td>3,112</td><td>2,797</td><td>0,423 4</td><td>0,499 4</td></tr>
+                                <tr data-p="25"><td>25</td><td>3,135</td><td>2,816</td><td>0,437 6</td><td>0,512 3</td></tr>
+                                <tr data-p="26"><td>26</td><td>3,157</td><td>2,834</td><td>0,451 0</td><td>0,524 5</td></tr>
+                                <tr data-p="27"><td>27</td><td>3,178</td><td>2,851</td><td>0,463 8</td><td>0,536 0</td></tr>
+                                <tr data-p="28"><td>28</td><td>3,199</td><td>2,867</td><td>0,475 9</td><td>0,547 0</td></tr>
+                                <tr data-p="29"><td>29</td><td>3,218</td><td>2,882</td><td>0,487 5</td><td>0,557 4</td></tr>
+                                <tr data-p="30"><td>30</td><td>3,236</td><td>2,897</td><td>0,498 5</td><td>0,567 2</td></tr>
+                                <tr data-p="31"><td>31</td><td>3,253</td><td>2,911</td><td>0,509 1</td><td>0,576 6</td></tr>
+                                <tr data-p="32"><td>32</td><td>3,270</td><td>2,924</td><td>0,519 2</td><td>0,585 6</td></tr>
+                                <tr data-p="33"><td>33</td><td>3,286</td><td>2,937</td><td>0,528 8</td><td>0,594 1</td></tr>
+                                <tr data-p="34"><td>34</td><td>3,301</td><td>2,949</td><td>0,538 1</td><td>0,602 3</td></tr>
+                                <tr data-p="35"><td>35</td><td>3,316</td><td>2,961</td><td>0,546 9</td><td>0,610 1</td></tr>
+                                <tr data-p="36"><td>36</td><td>3,330</td><td>2,972</td><td>0,555 4</td><td>0,617 5</td></tr>
+                                <tr data-p="37"><td>37</td><td>3,343</td><td>2,983</td><td>0,563 6</td><td>0,624 7</td></tr>
+                                <tr data-p="38"><td>38</td><td>3,356</td><td>2,994</td><td>0,572 4</td><td>0,631 6</td></tr>
+                                <tr data-p="39"><td>39</td><td>3,369</td><td>3,004</td><td>0,578 9</td><td>0,638 2</td></tr>
+                                <tr data-p="40"><td>40</td><td>3,381</td><td>3,014</td><td>0,586 2</td><td>0,644 5</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const annotationPlugin = {
+            id: 'critLines',
+            afterDraw(chart) {
+                const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+                const critVal = chart.config.options.plugins.critLines?.value;
+
+                if (critVal !== undefined && critVal !== null) {
+                    ctx.save();
+                    ctx.strokeStyle = '#dc2626';
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([4, 4]);
+
+                    const yTop = y.getPixelForValue(critVal);
+                    ctx.beginPath();
+                    ctx.moveTo(left, yTop);
+                    ctx.lineTo(right, yTop);
+                    ctx.stroke();
+
+                    if (chart.config.options.plugins.critLines?.symmetric) {
+                        const yBottom = y.getPixelForValue(-critVal);
+                        ctx.beginPath();
+                        ctx.moveTo(left, yBottom);
+                        ctx.lineTo(right, yBottom);
+                        ctx.stroke();
+                    }
+
+                    ctx.restore();
+                }
+            }
+        };
+
+        Chart.register(annotationPlugin);
+
+        let contadorParticipantes = 0;
+        let scatterChart = null;
+        let mandelHChart = null;
+        let mandelKChart = null;
+
+       const datosImagen = [
+            { num: 1, nombre: "Lab 1", valores: [91, 89.6] },
+            { num: 2, nombre: "Lab 2", valores: [89.7, 89.8] },
+            { num: 3, nombre: "Lab 3", valores: [88, 87.5] },
+            { num: 4, nombre: "Lab 4", valores: [89.2, 88.5] },
+            { num: 5, nombre: "Lab 5", valores: [89, 90] },
+            { num: 6, nombre: "Lab 6", valores: [88.5, 90.5] },
+            { num: 7, nombre: "Lab 7", valores: [88.9, 88.2] },
+            { num: 8, nombre: "Lab 8", valores: [0, 0] },
+            { num: 9, nombre: "Lab 9", valores: [90.1, 88.4] },
+            { num: 10, nombre: "Lab 10", valores: [86, 85.8] },
+            { num: 11, nombre: "Lab 11", valores: [87.6, 84.4] },
+            { num: 12, nombre: "Lab 12", valores: [88.2, 87.4] },
+            { num: 13, nombre: "Lab 13", valores: [91, 90.4] },
+            { num: 14, nombre: "Lab 14", valores: [87.5, 87.8] },
+            { num: 15, nombre: "Lab 15", valores: [87.5, 87.6] },
+            { num: 16, nombre: "Lab 16", valores: [88.8, 85] }
+        ];
+
+        function initChart() {
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+            scatterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: { datasets: [{ label: 'Mediciones (Nivel 1)', data: [], backgroundColor: '#2563eb', borderColor: '#1d4ed8', borderWidth: 1, pointRadius: 6 }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'category' } } }
+            });
+        }
+
+        function initMandelCharts() {
+            const ctxH = document.getElementById('mandelHChart').getContext('2d');
+            mandelHChart = new Chart(ctxH, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: 'Estadístico h', data: [], backgroundColor: '#3b82f6', borderColor: '#1d4ed8', borderWidth: 1 }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Participantes' } },
+                        y: { title: { display: true, text: 'Estadístico de Mandel h' } }
+                    },
+                    plugins: {
+                        title: { display: true, text: 'Prueba de consistencia gráfica (h)' },
+                        critLines: { value: 2, symmetric: true }
+                    }
+                }
+            });
+
+            const ctxK = document.getElementById('mandelKChart').getContext('2d');
+            mandelKChart = new Chart(ctxK, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Estadístico k',
+                        data: [],
+                        backgroundColor: '#0891b2',
+                        borderColor: '#0e7490',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Participantes' } },
+                        y: { title: { display: true, text: 'Estadístico de Mandel k' } }
+                    },
+                    plugins: {
+                        title: { display: true, text: 'Prueba de consistencia gráfica (k)' },
+                        critLines: { value: 2, symmetric: true }
+                    }
+                }
+            });
+        }
+
+      function agregarParticipante(nombre = "", valores = []) {
+        contadorParticipantes++;
+        const tbody = document.getElementById('tabla-body');
+        const tr = document.createElement('tr');
+        tr.dataset.participante = contadorParticipantes;
+
+        const nombreLab = nombre || `Lab ${contadorParticipantes}`;
+
+
+        const numCeldasInput = parseInt(document.getElementById('input-num-celdas').value) || 2;
+        const numCeldasEfectivas = valores.length > 0 ? valores.length : numCeldasInput;
+
+
+        if (valores.length > 0) {
+            const inputNumCeldas = document.getElementById('input-num-celdas');
+            if (inputNumCeldas) {
+                inputNumCeldas.value = valores.length;
+            }
+        }
+
+        let celdasValoresHTML = '';
+
+        for (let i = 0; i < numCeldasEfectivas; i++) {
+            const val = (valores[i] !== undefined && valores[i] !== null) ? valores[i] : '';
+            celdasValoresHTML += `<input type="text" class="celda-medicion valor-medicion" value="${val}" placeholder="-">`;
+        }
+
+        tr.innerHTML = `
+            <td>
+                <div class="part-cell-wrapper">
+                    <span class="part-num-fixed">${contadorParticipantes}</span>
+                    <span class="part-name-editable" contenteditable="true">${nombreLab}</span>
+                </div>
+            </td>
+            <td>
+                <div class="contenedor-valores">
+                    ${celdasValoresHTML}
+                </div>
+            </td>
+            <td style="text-align: center; vertical-align: middle;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+                    <!-- Botón 🗑️ Borrar Fila Completa -->
+                    <button type="button"
+                            onclick="eliminarParticipante(${contadorParticipantes})"
+                            style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; gap: 2px;"
+                            title="Eliminar este laboratorio por completo">
+                        🗑️ Fila
+                    </button>
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+        reindexarParticipantes();
+    }
+
+        function eliminarParticipante(num) {
+    const fila = document.querySelector(`tr[data-participante="${num}"]`);
+    if (fila) {
+        fila.remove();
+        reindexarParticipantes();
+    }
+}
+
+function eliminarUltimaCelda(idParticipante) {
+    const fila = document.querySelector(`tr[data-participante="${idParticipante}"]`);
+    if (!fila) return;
+
+    const contenedorValores = fila.querySelector('.contenedor-valores');
+    if (!contenedorValores) return;
+
+    const inputs = contenedorValores.querySelectorAll('.valor-medicion');
+
+
+    if (inputs.length > 1) {
+        inputs[inputs.length - 1].remove();
+    } else {
+        alert("⚠️ Debe haber al menos una celda de medición por participante.");
+    }
+}
+
+        function agregarCelda(idParticipante) {
+            const fila = document.querySelector(`tr[data-participante="${idParticipante}"]`);
+            if (!fila) return;
+
+            const contenedorValores = fila.querySelector('.contenedor-valores');
+            if (!contenedorValores) return;
+
+            const nuevoInput = document.createElement('input');
+            nuevoInput.type = 'text';
+            nuevoInput.className = 'celda-medicion valor-medicion';
+            nuevoInput.value = '';
+            nuevoInput.placeholder = '-';
+
+            contenedorValores.appendChild(nuevoInput);
+            nuevoInput.focus();
+        }
+
+        function actualizarCeldasExistentes() {
+            const nuevoNumCeldas = parseInt(document.getElementById('input-num-celdas').value) || 5;
+            const filas = document.querySelectorAll('#tabla-body tr');
+
+            filas.forEach(fila => {
+                const contenedor = fila.querySelector('.contenedor-valores');
+                const inputsActuales = contenedor.querySelectorAll('.valor-medicion');
+
+                const valoresGuardados = [];
+                inputsActuales.forEach(input => valoresGuardados.push(input.value));
+
+                let nuevoHTML = '';
+                for (let i = 0; i < nuevoNumCeldas; i++) {
+                    const val = valoresGuardados[i] !== undefined ? valoresGuardados[i] : '';
+                    nuevoHTML += `<input type="text" class="celda-medicion valor-medicion" value="${val}" placeholder="-">`;
+                }
+                contenedor.innerHTML = nuevoHTML;
+            });
+        }
+
+        function actualizarTablaMandel(pVal, nVal) {
+            const tabla = document.getElementById('tabla-mandel-referencia');
+            if (!tabla || !pVal) return;
+
+            tabla.querySelectorAll('tr').forEach(tr => tr.style.backgroundColor = '');
+            tabla.querySelectorAll('td').forEach(td => {
+                td.style.backgroundColor = '';
+                td.style.color = '';
+                td.style.fontWeight = '';
+            });
+
+            const filaP = tabla.querySelector(`tr[data-p="${pVal}"]`);
+            if (!filaP) return;
+
+            filaP.style.backgroundColor = '#fef2f2';
+            const celdas = filaP.querySelectorAll('td');
+
+            if (celdas[1]) {
+                celdas[1].style.backgroundColor = '#dc2626';
+                celdas[1].style.color = '#ffffff';
+                celdas[1].style.fontWeight = '800';
+            }
+        }
+
+        function actualizarTablaCochran(pVal, nVal) {
+            const tabla = document.getElementById('tabla-cochran-referencia');
+            if (!tabla || !pVal) return;
+
+            tabla.querySelectorAll('tr').forEach(tr => tr.style.backgroundColor = '');
+            tabla.querySelectorAll('td').forEach(td => {
+                td.style.backgroundColor = '';
+                td.style.color = '';
+                td.style.fontWeight = '';
+            });
+
+            const filaP = tabla.querySelector(`tr[data-p="${pVal}"]`);
+            if (!filaP) return;
+
+            filaP.style.backgroundColor = '#fffbeb';
+
+            if (nVal && nVal >= 2 && nVal <= 6) {
+                const celdas = filaP.querySelectorAll('td');
+                const idx1Porc = (nVal - 2) * 2 + 1;
+                const idx5Porc = (nVal - 2) * 2 + 2;
+
+                if (celdas[idx1Porc]) {
+                    celdas[idx1Porc].style.backgroundColor = '#dc2626';
+                    celdas[idx1Porc].style.color = '#ffffff';
+                    celdas[idx1Porc].style.fontWeight = '800';
+                }
+
+                if (celdas[idx5Porc]) {
+                    celdas[idx5Porc].style.backgroundColor = '#d97706';
+                    celdas[idx5Porc].style.color = '#ffffff';
+                    celdas[idx5Porc].style.fontWeight = '800';
+                }
+            }
+        }
+
+        function actualizarTablaGrubbs(pVal, nVal) {
+    const tabla = document.getElementById('tabla-grubbs-referencia');
+    if (!tabla || !pVal) return;
+
+
+    tabla.querySelectorAll('tr').forEach(tr => {
+        tr.style.backgroundColor = '';
+    });
+    tabla.querySelectorAll('td').forEach(td => {
+        td.style.backgroundColor = '';
+        td.style.color = '';
+        td.style.fontWeight = '';
+    });
+
+
+    const filaP = tabla.querySelector(`tr[data-p="${pVal}"]`);
+    if (!filaP) return;
+
+
+    filaP.style.backgroundColor = '#fef2f2';
+
+
+    filaP.querySelectorAll('td').forEach(td => {
+        td.style.backgroundColor = '#dc2626';
+        td.style.color = '#ffffff';
+        td.style.fontWeight = '800';
+    });
+}
+async function cargarMetodosSelect() {
+    try {
+        const resp = await fetch('/metodos');
+        if (!resp.ok) return;
+        const metodos = await resp.json();
+
+        const selectConfig = document.getElementById('select-metodo');
+        const selectFiltro = document.getElementById('select-filtro-metodo');
+
+        const valConfigActual = selectConfig ? selectConfig.value : '';
+        const valFiltroActual = selectFiltro ? selectFiltro.value : '';
+
+        if (selectConfig) {
+            selectConfig.innerHTML = '';
+            metodos.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.nombre;
+                opt.textContent = m.nombre;
+                opt.setAttribute('data-id', m.id);
+                selectConfig.appendChild(opt);
+            });
+            if (valConfigActual) selectConfig.value = valConfigActual;
+        }
+
+        if (selectFiltro) {
+            selectFiltro.innerHTML = '<option value="">Todos los Métodos</option>';
+            metodos.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.nombre;
+                opt.textContent = m.nombre;
+                opt.setAttribute('data-id', m.id);
+                selectFiltro.appendChild(opt);
+            });
+            if (valFiltroActual) selectFiltro.value = valFiltroActual;
+        }
+    } catch (err) {
+        console.error("Error al cargar métodos:", err);
+    }
+}
+
+
+async function quitarMetodo() {
+    const select = document.getElementById('select-metodo');
+    if (!select || !select.value) {
+        alert("Selecciona un método para eliminar.");
+        return;
+    }
+
+    const opcionSeleccionada = select.options[select.selectedIndex];
+    const metodoId = opcionSeleccionada.getAttribute('data-id');
+    const metodoNombre = select.value;
+
+    if (!metodoId) {
+        alert("No se pudo obtener el identificador del método.");
+        return;
+    }
+
+    if (confirm(`¿Estás seguro de eliminar el método "${metodoNombre}" del catálogo?`)) {
+        try {
+            const resp = await fetch(`/metodos/${metodoId}`, {
+                method: 'DELETE'
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json();
+                alert(`Error: ${errData.detail || 'No se pudo eliminar el método.'}`);
+                return;
+            }
+
+
+            await cargarMetodosSelect();
+            alert(`🗑️ Método "${metodoNombre}" eliminado con éxito.`);
+
+        } catch (err) {
+            console.error("Error al eliminar método:", err);
+            alert("Ocurrió un error al conectar con el servidor.");
+        }
+    }
+}
+
+async function agregarNuevoMetodoPrompt() {
+    const nuevoNombre = prompt("Ingresa la norma o método normativo nuevo (Ej: ASTM D1121-24):");
+    if (!nuevoNombre || !nuevoNombre.trim()) return;
+    try {
+        const resp = await fetch('/metodos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: nuevoNombre.trim() })
+        });
+
+        if (!resp.ok) {
+            alert("No se pudo guardar el nuevo método.");
+            return;
+        }
+
+        const data = await resp.json();
+        await cargarMetodosSelect();
+
+
+        const select = document.getElementById('select-metodo');
+        if (select) select.value = data.nombre;
+
+        alert(`✅ Método "${data.nombre}" disponible en la lista.`);
+    } catch (err) {
+        console.error("Error al agregar método:", err);
+        alert("Ocurrió un error al intentar registrar el método.");
+    }
+}
+
+
+document.addEventListener('DOMContentLoaded', cargarMetodosSelect);
+
+        function limpiarConsola() {
+            contadorParticipantes = 0;
+            const tbody = document.getElementById('tabla-body');
+            if (tbody) tbody.innerHTML = '';
+            const inputObs = document.getElementById('input-observaciones');
+            if (inputObs) inputObs.value = '';
+            const btnGuardarDB = document.getElementById('btn-guardar-db');
+            if (btnGuardarDB) btnGuardarDB.style.display = 'none';
+            const btnpdf = document.getElementById('btn-pdf');
+            if (btnpdf) btnpdf.style.display = 'none';
+
+            if (scatterChart) {
+                scatterChart.data.datasets[0].data = [];
+                scatterChart.update();
+            }
+            if (mandelHChart) {
+                mandelHChart.data.labels = [];
+                mandelHChart.data.datasets[0].data = [];
+                mandelHChart.update();
+            }
+            if (mandelKChart) {
+                mandelKChart.data.labels = [];
+                mandelKChart.data.datasets[0].data = [];
+                mandelKChart.update();
+            }
+
+            const valMandel = document.getElementById('val-mandel');
+            const subMandel = document.getElementById('sub-mandel');
+            if (valMandel) valMandel.textContent = 'Sin evaluar';
+            if (subMandel) subMandel.textContent = 'Esperando datos...';
+
+            const valCochran = document.getElementById('val-cochran');
+            const subCochran = document.getElementById('sub-cochran');
+            if (valCochran) valCochran.textContent = 'Sin evaluar';
+            if (subCochran) subCochran.textContent = 'Esperando datos...';
+
+            const valGrubbs = document.getElementById('val-grubbs');
+            const subGrubbs = document.getElementById('sub-grubbs');
+            if (valGrubbs) valGrubbs.textContent = 'Sin evaluar';
+            if (subGrubbs) subGrubbs.textContent = 'Esperando datos...';
+
+            ['card-mandel', 'card-cochran', 'card-grubbs'].forEach(id => {
+                const card = document.getElementById(id);
+                if (card) card.className = 'metric-card';
+            });
+
+            const idsTablas = [
+                'tabla-resumen-body', 'tabla-desviacion-body', 'tabla-diferencias-body',
+                'tabla-ponderada-body', 'tabla-k-body', 'tabla-desviacion-body2',
+                'tabla-grubbs-evaluacion-body', 'tabla-resumen-body3'
+            ];
+            idsTablas.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<tr><td colspan="6" style="color: var(--slate-500);">Sin datos.</td></tr>';
+            });
+
+            const idsMetricas = [
+                'calc-suma-productos', 'calc-varianza', 'calc-gran-promedio', 'calc-gran-promedio2',
+                'calc-min-max', 'calc-desviacion', 'calc-formula1', 'calc-formula2', 'calc-mj',
+                'sr2j', 'calc-suma-varianzas', 'calc-raiz-suma-varianzas', 'calc-promedio-desviaciones',
+                'calc-cochran', 'calc-desviacion-diferencias', 'calc-suma-ponderada', 's2dj',
+                'sr_sl', 's2lj', 'raiz_sr_sl', 'raiz_srj', 'srj2', 'porc_R', 'suma_s2rj',
+                'desv_prom', 's2o', 'xp_1p', 's2p', 'G', 'Gp', 'Gpmin', 'x1_2', 's12_2', 'G2'
+            ];
+            idsMetricas.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = '-';
+            });
+
+            const tablasRef = ['tabla-mandel-referencia', 'tabla-cochran-referencia', 'tabla-grubbs-referencia'];
+            tablasRef.forEach(idTabla => {
+                const t = document.getElementById(idTabla);
+                if (t) {
+                    t.querySelectorAll('tr').forEach(tr => tr.style.backgroundColor = '');
+                    t.querySelectorAll('td').forEach(td => {
+                        td.style.backgroundColor = '';
+                        td.style.color = '';
+                        td.style.fontWeight = '';
+                    });
+                }
+            });
+
+            for (let i = 0; i < 5; i++) {
+                agregarParticipante();
+            }
+        }
+
+        function cargarDatosPrueba() {
+            contadorParticipantes = 0;
+            const tbody = document.getElementById('tabla-body');
+            if (tbody) tbody.innerHTML = '';
+
+            datosImagen.forEach(item => {
+                agregarParticipante(item.nombre, item.valores);
+            });
+
+            const toast = document.getElementById('status-toast');
+            if (toast) {
+                toast.style.display = 'block';
+                toast.innerText = '📋 Datos de laboratorio de prueba cargados correctamente.';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            }
+        }
+
+       function obtenerParticipantesData() {
+    const participantes = [];
+    const filas = document.querySelectorAll('#tabla-body tr');
+
+    filas.forEach(fila => {
+        const nombreSpan = fila.querySelector('.part-name-editable');
+        const nombre = nombreSpan ? nombreSpan.innerText.trim() : 'Lab';
+
+        const inputs = fila.querySelectorAll('input[type="text"], input[type="number"]');
+        const valores = [];
+
+        inputs.forEach(input => {
+            const valStr = input.value.trim();
+
+            if (valStr !== "" && valStr !== "-" && !isNaN(valStr)) {
+                valores.push(parseFloat(valStr));
+            }
+        });
+
+        if (valores.length > 0) {
+            participantes.push({
+                nombre: nombre,
+                valores: valores
+            });
+        }
+    });
+
+    return participantes;
+}
+
+        function actualizarTarjetasEvaluacion(data) {
+            const cardMandel = document.getElementById('card-mandel');
+            const valMandel = document.getElementById('val-mandel');
+            const subMandel = document.getElementById('sub-mandel');
+
+            if (cardMandel && data.diferencias2 && data.tabla_k) {
+                const fallosH = data.diferencias2.filter(item => item.cumple === 'NO CUMPLE').length;
+                const fallosK = data.tabla_k.filter(item => item.cumple === 'NO CUMPLE').length;
+                const totalFallos = fallosH + fallosK;
+
+                cardMandel.className = 'metric-card';
+
+                if (totalFallos === 0) {
+                    cardMandel.classList.add('status-pass');
+                    valMandel.textContent = 'CONFORME';
+                    subMandel.textContent = 'Dentro de límites de h y k';
+                } else {
+                    cardMandel.classList.add('status-fail');
+                    valMandel.textContent = 'NO CONFORME';
+                    subMandel.textContent = `${totalFallos} indicador(es) fuera de rango`;
+                }
+            }
+
+            const cardCochran = document.getElementById('card-cochran');
+            const valCochran = document.getElementById('val-cochran');
+            const subCochran = document.getElementById('sub-cochran');
+
+            if (cardCochran && data.criterio_cochran) {
+                cardCochran.className = 'metric-card';
+
+                if (data.resultado_cochran === 'CONSISTENTE') {
+                    cardCochran.classList.add('status-pass');
+                    valCochran.textContent = 'CONFORME';
+                    subCochran.textContent = `Varianza homogénea (${data.criterio_cochran})`;
+                } else {
+                    cardCochran.classList.add('status-fail');
+                    valCochran.textContent = 'NO CONFORME';
+                    subCochran.textContent = `Varianza atípica (${data.criterio_cochran})`;
+                }
+            }
+
+            const cardGrubbs = document.getElementById('card-grubbs');
+            const valGrubbs = document.getElementById('val-grubbs');
+            const subGrubbs = document.getElementById('sub-grubbs');
+
+
+            if (cardGrubbs && data.evaluacion_grubbs) {
+                const eg = data.evaluacion_grubbs;
+                const estados = [eg.un_maximo.estado, eg.un_minimo.estado, eg.dos_maximos.estado, eg.dos_minimos.estado];
+
+                cardGrubbs.className = 'metric-card';
+
+                if (estados.includes('NO CONSISTENTE')) {
+                    cardGrubbs.classList.add('status-fail');
+                    valGrubbs.textContent = 'NO CONSISTENTE';
+                    subGrubbs.textContent = 'Atípicos severos detectados (1%)';
+                } else if (estados.includes('ADVERTENCIA')) {
+                    cardGrubbs.classList.add('status-warn');
+                    valGrubbs.textContent = 'ADVERTENCIA';
+                    subGrubbs.textContent = 'Valores sospechosos (5%)';
+                } else {
+                    cardGrubbs.classList.add('status-pass');
+                    valGrubbs.textContent = 'CONFORME';
+                    subGrubbs.textContent = 'Sin atípicos detectados';
+                }
+            }
+        }
+
+        function renderizarRespuestasBackend(data) {
+            const btnGuardarDB = document.getElementById('btn-guardar-db');
+            const btnpdf = document.getElementById('btn-pdf');
+            const pVal = data.resumen ? data.resumen.length : 0;
+            const nVal = (data.resumen && data.resumen[0]) ? data.resumen[0].registros : 5;
+
+            actualizarTablaCochran(pVal, nVal);
+            actualizarTablaMandel(pVal, nVal);
+            actualizarTablaGrubbs(pVal, nVal);
+
+            if (btnpdf) btnpdf.style.display = 'inline-flex';
+            if (btnGuardarDB) btnGuardarDB.style.display = 'inline-flex';
+
+            const toast = document.getElementById('status-toast');
+            actualizarTarjetasEvaluacion(data);
+
+            if (scatterChart && data.puntos_grafica) {
+                scatterChart.data.datasets[0].data = data.puntos_grafica;
+                scatterChart.update();
+            }
+
+
+            const resumenBody = document.getElementById('tabla-resumen-body');
+            const desviacionBody = document.getElementById('tabla-desviacion-body');
+            if (resumenBody) resumenBody.innerHTML = '';
+            if (desviacionBody) desviacionBody.innerHTML = '';
+
+            if (data.resumen) {
+                data.resumen.forEach((p, idx) => {
+                    const numConsecutivo = idx + 1;
+                    if (resumenBody) {
+                        resumenBody.innerHTML += `<tr><td><strong>${numConsecutivo}</strong></td><td>${p.nombre}</td><td>${p.registros}</td><td>${p.promedio}</td><td><strong>${p.producto}</strong></td></tr>`;
+                    }
+                    if (desviacionBody) {
+                        desviacionBody.innerHTML += `<tr><td><strong>${numConsecutivo}</strong></td><td>${p.nombre}</td><td>${p.registros}</td><td>${p.promedio}</td><td><strong>${p.desviacion}</strong></td></tr>`;
+                    }
+                });
+            }
+
+
+            const difBody = document.getElementById('tabla-diferencias-body');
+            const pondBody = document.getElementById('tabla-ponderada-body');
+            if (difBody) difBody.innerHTML = '';
+            if (pondBody) pondBody.innerHTML = '';
+
+            if (data.diferencias) {
+                data.diferencias.forEach((d, idx) => {
+                    const numConsecutivo = idx + 1;
+                    if (difBody) {
+                        difBody.innerHTML += `<tr><td><strong>${numConsecutivo}</strong></td><td>${d.nombre}</td><td>${d.promedio}</td><td><strong>${d.diferencia}</strong></td></tr>`;
+                    }
+                    if (pondBody) {
+                        pondBody.innerHTML += `<tr><td><strong>${numConsecutivo}</strong></td><td>${d.nombre}</td><td>${d.registros}</td><td>${d.diferencia}</td><td><strong>${d.ponderado}</strong></td></tr>`;
+                    }
+                });
+            }
+
+
+            const kBody = document.getElementById('tabla-k-body');
+            if (kBody && data.tabla_k) {
+                kBody.innerHTML = data.tabla_k.map((k, idx) => {
+                    const numConsecutivo = idx + 1;
+                    const esCumple = k.cumple === "CUMPLE";
+                    const colorCumple = esCumple ? "#166534" : (k.cumple === "NO CUMPLE" ? "#991b1b" : "#64748b");
+                    const textoCumple = k.h_critico ? `${k.cumple} (k ≤ ${k.h_critico})` : k.cumple;
+
+                    return `
+                        <tr>
+                            <td><strong>${numConsecutivo}</strong></td>
+                            <td style="font-weight:600; font-family:var(--font-mono);">${k.k_val}</td>
+                            <td style="font-weight:600; color:${colorCumple};">${textoCumple}</td>
+                        </tr>`;
+                }).join('');
+            }
+
+
+            const desviacionBody2 = document.getElementById('tabla-desviacion-body2');
+            if (desviacionBody2 && data.diferencias2) {
+                desviacionBody2.innerHTML = data.diferencias2.map((item, idx) => {
+                    const numConsecutivo = idx + 1;
+                    const esCumple = item.cumple === "CUMPLE";
+                    const colorCumple = esCumple ? "#166534" : "#991b1b";
+                    const textoCumple = `${item.cumple} (|h| ≤ ${item.h_critico})`;
+
+                    return `
+                        <tr>
+                            <td><strong>${numConsecutivo}</strong></td>
+                            <td>${item.nombre}</td>
+                            <td>${item.registros}</td>
+                            <td>${item.promedio}</td>
+                            <td style="font-family:var(--font-mono);"><strong>${item.hij}</strong></td>
+                            <td style="font-weight: 600; color: ${colorCumple};">${textoCumple}</td>
+                        </tr>`;
+                }).join('');
+            }
+
+
+            if (mandelHChart && data.diferencias2 && data.h_critico) {
+                const labels = data.diferencias2.map((_, idx) => `${idx + 1}`);
+                const valoresH = data.diferencias2.map(item => item.hij);
+
+                mandelHChart.data.labels = labels;
+                mandelHChart.data.datasets[0].data = valoresH;
+                mandelHChart.data.datasets[0].backgroundColor = valoresH.map(val =>
+                    Math.abs(val) > data.h_critico ? '#ef4444' : '#2563eb'
+                );
+
+                mandelHChart.options.plugins.title.text = `Evaluación Mandel h (Límite crítico: ±${data.h_critico})`;
+                mandelHChart.options.plugins.critLines.value = data.h_critico;
+                mandelHChart.update();
+            }
+
+            if (mandelKChart && data.tabla_k && data.h_critico) {
+                const labels = data.tabla_k.map((_, idx) => `${idx + 1}`);
+                const valoresK = data.tabla_k.map(item => parseFloat(item.k_val) || 0);
+
+                mandelKChart.data.labels = labels;
+                mandelKChart.data.datasets[0].data = valoresK;
+                mandelKChart.data.datasets[0].backgroundColor = valoresK.map(val =>
+                    val > data.h_critico ? '#ef4444' : '#0891b2'
+                );
+
+                mandelKChart.options.plugins.title.text = `Evaluación Mandel k (Límite crítico: ${data.h_critico})`;
+                mandelKChart.options.plugins.critLines.value = data.h_critico;
+                mandelKChart.options.plugins.critLines.symmetric = true;
+
+                const limiteEjeY = Number((data.h_critico * 1.15).toFixed(2));
+                mandelKChart.options.scales.y.max = limiteEjeY;
+                mandelKChart.options.scales.y.min = -limiteEjeY;
+
+                mandelKChart.update();
+            }
+
+
+            const grubbsEvalBody = document.getElementById('tabla-grubbs-evaluacion-body');
+            if (grubbsEvalBody && data.evaluacion_grubbs) {
+                const eg = data.evaluacion_grubbs;
+                const c1 = eg.criticos.un_valor;
+                const c2 = eg.criticos.dos_valores;
+
+                const getBadge = (estado) => {
+                    if (estado === 'CONSISTENTE') return '<span class="badge badge-success">CONSISTENTE</span>';
+                    if (estado === 'ADVERTENCIA') return '<span class="badge badge-warning">ADVERTENCIA</span>';
+                    if (estado === 'NO CONSISTENTE') return '<span class="badge badge-danger">NO CONSISTENTE</span>';
+                    return '<span class="badge badge-secondary">N/A</span>';
+                };
+
+                const filas = [
+                    { caso: "1 Valor Extremo Máximo (G max)", calc: eg.un_maximo.valor_g, c5: c1['5%'] ?? '-', c1: c1['1%'] ?? '-', dictamen: eg.un_maximo.dictamen, estado: eg.un_maximo.estado },
+                    { caso: "1 Valor Extremo Mínimo (G min)", calc: eg.un_minimo.valor_g, c5: c1['5%'] ?? '-', c1: c1['1%'] ?? '-', dictamen: eg.un_minimo.dictamen, estado: eg.un_minimo.estado },
+                    { caso: "2 Valores Extremos Máximos (G2 high)", calc: eg.dos_maximos.valor_g, c5: c2['5%'] ?? '-', c1: c2['1%'] ?? '-', dictamen: eg.dos_maximos.dictamen, estado: eg.dos_maximos.estado },
+                    { caso: "2 Valores Extremos Mínimos (G2 low)", calc: eg.dos_minimos.valor_g, c5: c2['5%'] ?? '-', c1: c2['1%'] ?? '-', dictamen: eg.dos_minimos.dictamen, estado: eg.dos_minimos.estado }
+                ];
+
+                grubbsEvalBody.innerHTML = filas.map(f => `
+                    <tr>
+                        <td style="text-align: left;"><strong>${f.caso}</strong></td>
+                        <td><code>${f.calc}</code></td>
+                        <td>${f.c5}</td>
+                        <td>${f.c1}</td>
+                        <td>${f.dictamen}</td>
+                        <td>${getBadge(f.estado)}</td>
+                    </tr>
+                `).join('');
+            }
+
+            document.getElementById('cochran-header-c1').innerText = `C₁ Calculado = ${data.cochran || '-'}`;
+            document.getElementById('cochran-val-5').innerText = data.cochran_critico_5 || '-';
+            document.getElementById('cochran-val-1').innerText = data.cochran_critico_1 || '-';
+            document.getElementById('cochran-criterio').innerText = data.criterio_cochran || 'C₁ < -';
+
+            const resCochran = document.getElementById('cochran-resultado');
+            const cardCochran = document.getElementById('cochran-status-card');
+            resCochran.innerText = data.resultado_cochran || '-';
+
+            if (data.resultado_cochran === 'CONSISTENTE') {
+                cardCochran.className = 'metric-card status-pass';
+            } else if (data.resultado_cochran === 'NO CONSISTENTE') {
+                cardCochran.className = 'metric-card status-fail';
+            }
+
+
+            const resumenBody3 = document.getElementById('tabla-resumen-body3');
+            if (resumenBody3 && data.resumen_grubbs) {
+                resumenBody3.innerHTML = data.resumen_grubbs.map((p, idx) => `
+                    <tr>
+                        <td><strong>${idx + 1}</strong></td> <!-- 👈 Posición ordinal (1..N) -->
+                        <td>${p.nombre}</td>
+                        <td><strong>${p.promedio}</strong></td>
+                    </tr>
+                `).join('');
+            }
+
+            const resumenBody4 = document.getElementById('tabla-resumen-body4');
+            if (resumenBody4 && data.resumen_grubbs) {
+                const totalParticipantes = data.resumen_grubbs.length;
+                const formatearNumero = (valor) => {
+                    if (valor === undefined || valor === null || isNaN(valor)) return '-';
+                    return Number(valor).toFixed(3);
+                };
+
+                const valorMj = formatearNumero(data.mj);
+                const valorsr = formatearNumero(data.raizsr2j);
+                const valorsrj = formatearNumero(data.raiz_srj);
+
+                resumenBody4.innerHTML = `
+                    <tr>
+                        <td><strong>${totalParticipantes}</strong></td>
+                        <td><strong>${valorMj}</strong></td>
+                        <td><strong>${valorsr}</strong></td>
+                        <td><strong>${valorsrj}</strong></td>
+                    </tr>
+                `;
+            }
+
+
+            if (data.suma_productos_tabla2 !== undefined) document.getElementById('calc-suma-productos').innerText = data.suma_productos_tabla2;
+            if (data.varianza !== undefined) document.getElementById('calc-varianza').innerText = data.varianza;
+            if (data.gran_promedio !== undefined) {
+                document.getElementById('calc-gran-promedio').innerText = data.gran_promedio;
+                document.getElementById('calc-gran-promedio2').innerText = data.gran_promedio;
+            }
+            if (data.minimo !== undefined && data.maximo !== undefined) document.getElementById('calc-min-max').innerText = `${data.minimo} / ${data.maximo}`;
+            if (data.desviacion_estandar !== undefined) document.getElementById('calc-desviacion').innerText = data.desviacion_estandar;
+            if (data.formula1 !== undefined) {
+                document.getElementById('calc-formula1').innerText = data.formula1;
+                document.getElementById('calc-formula2').innerText = data.formula1;
+            }
+            if (data.mj !== undefined) document.getElementById('calc-mj').innerText = data.mj;
+            if (data.sr2j !== undefined) document.getElementById('sr2j').innerText = data.sr2j;
+
+            if (data.suma_varianzas !== undefined) document.getElementById('calc-suma-varianzas').innerText = data.suma_varianzas;
+            if (data.raiz_suma_varianzas !== undefined) document.getElementById('calc-raiz-suma-varianzas').innerText = data.raiz_suma_varianzas;
+            if (data.promedio_desviaciones !== undefined) document.getElementById('calc-promedio-desviaciones').innerText = data.promedio_desviaciones;
+            if (data.cochran !== undefined) document.getElementById('calc-cochran').innerText = data.cochran;
+
+            if (data.desviacion_diferencias !== undefined) document.getElementById('calc-desviacion-diferencias').innerText = data.desviacion_diferencias;
+            if (data.suma_ponderada !== undefined) document.getElementById('calc-suma-ponderada').innerText = data.suma_ponderada;
+            if (data.s2dj !== undefined) document.getElementById('s2dj').innerText = data.s2dj;
+            if (data.sr_sl !== undefined) document.getElementById('sr_sl').innerText = data.sr_sl;
+            if (data.s2lj !== undefined) document.getElementById('s2lj').innerText = data.s2lj;
+            if (data.raiz_sr_sl !== undefined) document.getElementById('raiz_sr_sl').innerText = data.raiz_sr_sl;
+            if (data.raiz_srj !== undefined) document.getElementById('raiz_srj').innerText = data.raiz_srj;
+            if (data.srj2 !== undefined) document.getElementById('srj2').innerText = data.srj2;
+            if (data.porc_R !== undefined) document.getElementById('porc_R').innerText = data.porc_R;
+             if (data.porc_R !== undefined) document.getElementById('porc_R2').innerText = data.porc_R;
+            if (data.suma_s2rj !== undefined) document.getElementById('suma_s2rj').innerText = data.suma_s2rj;
+            if (data.desv_prom !== undefined) document.getElementById('desv_prom').innerText = data.desv_prom;
+            if (data.s2o !== undefined) document.getElementById('s2o').innerText = data.s2o;
+            if (data.xp_1p !== undefined) document.getElementById('xp_1p').innerText = data.xp_1p;
+            if (data.s2p !== undefined) document.getElementById('s2p').innerText = data.s2p;
+            if (data.G !== undefined) document.getElementById('G').innerText = data.G;
+            if (data.Gp !== undefined) document.getElementById('Gp').innerText = data.Gp;
+            if (data.Gpmin !== undefined) document.getElementById('Gpmin').innerText = data.Gpmin;
+            if (data.x1_2 !== undefined) document.getElementById('x1_2').innerText = data.x1_2;
+            if (data.s12_2 !== undefined) document.getElementById('s12_2').innerText = data.s12_2;
+            if (data.G2 !== undefined) document.getElementById('G2').innerText = data.G2;
+
+            if (toast) {
+                toast.style.display = 'block';
+                toast.innerText = '⚡ ' + (data.mensaje || 'Cálculos procesados correctamente');
+                setTimeout(() => { toast.style.display = 'none'; }, 4000);
+            }
+        }
+
+       async function guardarTabla() {
+    const inputMuestra = document.getElementById('input-num-muestra');
+    const numMuestra = inputMuestra ? inputMuestra.value.trim() : "";
+
+    if (!numMuestra) {
+        alert("⚠️ ATENCIÓN METROLÓGICA:\n\nDebe ingresar el 'N° de Muestra / Lote' para realizar el cálculo de consistencia e ISO 5725-2.");
+        if (inputMuestra) {
+            inputMuestra.focus();
+            inputMuestra.style.borderColor = "#ef4444";
+            setTimeout(() => { inputMuestra.style.borderColor = "var(--slate-300)"; }, 3000);
+        }
+        return;
+    }
+
+    const participantesData = obtenerParticipantesData();
+    if (participantesData.length === 0) {
+        alert("Ingresa un participante con al menos una medición.");
+        return;
+    }
+
+
+    const totalCeldas = participantesData.reduce((acc, p) => acc + (p.valores ? p.valores.length : 0), 0);
+
+    try {
+        const respuesta = await fetch('/guardar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                num_muestra: numMuestra,
+                total_celdas: totalCeldas,
+                participantes: participantesData
+            })
+        });
+
+        if (!respuesta.ok) throw new Error('Error en el servidor');
+
+        const data = await respuesta.json();
+
+
+        data.mensaje = "Se han calculado correctamente los parámetros estadísticos ISO 5725-2.";
+
+
+        renderizarRespuestasBackend(data);
+
+        // 3. Revelar botón de guardar en BD después de un cálculo exitoso
+        const btnGuardarDB = document.getElementById('btn-guardar-db');
+        if (btnGuardarDB) btnGuardarDB.style.display = 'inline-flex';
+
+        alert("✅ Cálculos procesados exitosamente.\n\nSe han actualizado los parámetros globales e indicadores de Mandel, Cochran y Grubbs.");
+
+        // 4. Forzar visibilidad del toast flotante
+        const toast = document.getElementById('status-toast');
+        if (toast) {
+            toast.style.display = 'block';
+            toast.style.background = 'var(--status-pass-bg)';
+            toast.style.color = 'var(--status-pass-text)';
+            toast.style.border = '1px solid var(--status-pass-border)';
+            toast.innerText = '⚡ Se han calculado correctamente los parámetros e indicadores normativos.';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 4000);
+        }
+
+    } catch (err) {
+        console.error(err);
+        alert('Ocurrió un error al procesar en FastAPI.');
+    }
+}
+
+  async function guardarAvanzadoDB() {
+    const participantesData = obtenerParticipantesData();
+    if (participantesData.length === 0) {
+        alert("⚠️ Ingresa al menos un participante con mediciones antes de guardar.");
+        return;
+    }
+
+    const numMuestraInput = document.getElementById('input-num-muestra');
+    const metodoInput = document.getElementById('select-metodo');
+    const obsInput = document.getElementById('input-observaciones');
+    const valorMuestra = numMuestraInput ? numMuestraInput.value.trim() : "";
+    const metodo = metodoInput ? metodoInput.value : "ASTM D1121";
+    const observaciones = obsInput ? obsInput.value.trim() : "";
+
+    if (!valorMuestra) {
+        alert("⚠️ Por favor, ingresa el número de muestra antes de guardar.");
+        if (numMuestraInput) numMuestraInput.focus();
+        return;
+    }
+
+    const desearGuardar = confirm(`¿Desea guardar los datos de la muestra "${valorMuestra}" en la base de datos LIMS?`);
+    if (!desearGuardar) return;
+
+    // 📊 1. CALCULAR EL TOTAL DE CELDAS Y REPARAR ÍNDICES
+    const totalCeldas = participantesData.reduce((acc, p) => acc + (p.valores ? p.valores.length : 0), 0);
+
+    // Aseguramos que cada participante conserve su número secuencial real (1, 2, 3...)
+    const participantesFormateados = participantesData.map((p, index) => ({
+        num: index + 1,
+        participante_num: index + 1,
+        nombre: p.nombre || p.participante_nombre || `Lab ${index + 1}`,
+        participante_nombre: p.nombre || p.participante_nombre || `Lab ${index + 1}`,
+        valores: p.valores
+    }));
+
+    // 📦 2. PAYLOAD LIMPIO Y COMPATIBLE CON PYDANTIC
+    const payload = {
+        num_muestra: valorMuestra,
+        muestra: valorMuestra,
+        metodo: metodo,
+        observaciones: observaciones,
+        total_celdas: totalCeldas,
+        num_participantes: participantesFormateados.length,
+        participantes: participantesFormateados
+    };
+
+    try {
+        const respuesta = await fetch('/guardar_avanzado', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!respuesta.ok) {
+            throw new Error("Ocurrió un problema en el servidor al intentar guardar.");
+        }
+
+        const resultado = await respuesta.json();
+
+        // 📊 3. RENDERIZAR TABLAS, GRÁFICAS Y CARDS CON LA RESPUESTA DEL BACKEND
+        if (typeof renderizarRespuestasBackend === 'function') {
+            // Se manda 'resultado.evaluacion' o 'resultado' según la estructura devuelta
+            renderizarRespuestasBackend(resultado.evaluacion ? resultado.evaluacion.grubbs : resultado);
+        }
+
+        alert(`✅ Datos guardados correctamente.\n\nMuestra: ${resultado.num_muestra || valorMuestra}\nMétodo: ${resultado.metodo}\nCeldas/Mediciones: ${totalCeldas}\nDictamen Global: ${resultado.dictamen_global || 'EVALUADO'}`);
+
+        // Opcional: Mostrar el botón de PDF tras guardar exitosamente
+        const btnPdf = document.getElementById('btn-pdf');
+        if (btnPdf) btnPdf.style.display = 'inline-flex';
+
+    } catch (error) {
+        console.error("Error al guardar en la BD:", error);
+        alert("❌ Error: No se pudieron guardar los datos en la base de datos.");
+    }
+}
+
+        async function borrarRegistroActual() {
+            const inputMuestra = document.getElementById('input-num-muestra');
+            const numMuestra = inputMuestra ? inputMuestra.value.trim() : "";
+
+            if (!numMuestra) {
+                alert("⚠️ No hay ninguna muestra seleccionada para eliminar.");
+                return;
+            }
+
+            const confirmar = confirm(`¿Está seguro de que desea eliminar permanentemente el registro de la muestra "${numMuestra}" de la base de datos?\n\nEsta acción no se puede deshacer.`);
+            if (!confirmar) return;
+
+            try {
+                const resList = await fetch('/obtener_registros');
+                if (!resList.ok) throw new Error("No se pudo obtener la lista de registros.");
+
+                const registros = await resList.json();
+                const registroEncontrado = registros.find(r => r.muestra === numMuestra);
+
+                if (!registroEncontrado) {
+                    alert(`❌ No se encontró la muestra "${numMuestra}" en la base de datos.`);
+                    return;
+                }
+
+                const resDelete = await fetch(`/eliminar_registro/${registroEncontrado.id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!resDelete.ok) {
+                    throw new Error("Ocurrió un error en el servidor al intentar eliminar el registro.");
+                }
+
+                alert(`🗑️ El registro de la muestra "${numMuestra}" ha sido eliminado exitosamente.`);
+                window.location.href = "/registros";
+
+            } catch (err) {
+                console.error("Error al borrar el registro:", err);
+                alert("❌ No se pudo completar la eliminación del registro.");
+            }
+        }
+
+        function activarModoLectura() {
+            document.getElementById('input-num-muestra').disabled = true;
+            document.getElementById('select-metodo').disabled = true;
+            document.getElementById('input-num-celdas').disabled = true;
+            document.getElementById('input-observaciones').disabled = true;
+
+            document.querySelectorAll('#tabla-body input').forEach(input => {
+                input.readOnly = true;
+                input.style.backgroundColor = '#f1f5f9';
+                input.style.cursor = 'not-allowed';
+            });
+
+            document.querySelectorAll('#tabla-body button').forEach(btn => {
+                btn.style.display = 'none';
+            });
+
+            const btnAgregar = document.getElementById('btn-agregar-lab');
+            if (btnAgregar) btnAgregar.style.display = 'none';
+        }
+       function reindexarParticipantes() {
+    const filas = document.querySelectorAll('#tabla-body tr');
+
+    filas.forEach((fila, index) => {
+        const nuevoNumero = index + 1;
+
+        // 1. Actualizar el número visible en la primera columna (1, 2, 3...)
+        const numSpan = fila.querySelector('.part-num-fixed');
+        if (numSpan) {
+            numSpan.innerText = nuevoNumero;
+        }
+
+        // 2. Actualizar el nombre predeterminado si conserva el formato "Lab X"
+        const nameSpan = fila.querySelector('.part-name-editable');
+        if (nameSpan && nameSpan.innerText.trim().startsWith('Lab')) {
+            nameSpan.innerText = `Lab ${nuevoNumero}`;
+        }
+    });
+}
+window.addEventListener('beforeprint', () => {
+    document.querySelectorAll('details').forEach(acc => {
+        acc.dataset.estabaAbierto = acc.open; // Guardar estado
+        acc.open = true; // Abrir para impresión
+    });
+});
+
+window.addEventListener('afterprint', () => {
+    document.querySelectorAll('details').forEach(acc => {
+        // Restaurar estado previo
+        if (acc.dataset.estabaAbierto === 'false') {
+            acc.open = false;
+        }
+    });
+});
+
+function imprimirVistaCompleta() {
+    window.print();
+}
+
+        function desactivarModoLectura() {
+            document.getElementById('input-num-muestra').readOnly = false;
+            document.getElementById('select-metodo').disabled = false;
+            document.getElementById('input-num-celdas').readOnly = false;
+            document.getElementById('input-observaciones').disabled = false;
+
+            document.querySelectorAll('#tabla-body input').forEach(input => {
+                input.readOnly = false;
+                input.style.backgroundColor = '#ffffff';
+                input.style.cursor = 'text';
+            });
+
+            document.querySelectorAll('#tabla-body button').forEach(btn => {
+                btn.style.display = 'inline-flex';
+            });
+
+            const btnAgregar = document.getElementById('btn-agregar-lab');
+            if (btnAgregar) btnAgregar.style.display = 'inline-flex';
+        }
+
+        async function exportarExcel() {
+            const participantesData = obtenerParticipantesData();
+            if (participantesData.length === 0) {
+                alert("Ingresa al menos un participante con mediciones.");
+                return;
+            }
+
+            const payload = {
+                num_muestra: document.getElementById('input-num-muestra').value,
+                metodo: document.getElementById('select-metodo').value,
+                participantes: participantesData
+            };
+
+            const resp = await fetch('/exportar_excel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Reporte_${payload.num_muestra}.xlsx`;
+            a.click();
+        }
+       function habilitarEdicionConsola() {
+    // 1. Activar campos e inputs editables en la tabla
+    desactivarModoLectura();
+
+    // 2. Transformar el Banner en lugar de ocultarlo
+    const banner = document.getElementById('banner-inspeccion');
+    const badge = document.getElementById('badge-registro-id');
+    const inputMuestra = document.getElementById('input-num-muestra');
+    const numMuestra = inputMuestra ? inputMuestra.value : '-';
+
+    if (banner) {
+        banner.style.display = 'flex';
+        banner.style.borderColor = '#f59e0b'; // Borde ámbar/amarillo
+        banner.style.borderLeft = '5px solid #d97706';
+
+        banner.querySelector('strong').style.color = '#fbbf24';
+        banner.querySelector('strong').innerText = '✏️ MODO EDICIÓN DE REGISTRO HISTÓRICO';
+        banner.querySelector('p').innerText = 'Modificando mediciones guardadas. Recuerde presionar "Calcular" y luego "Guardar datos" para actualizar los registros.';
+    }
+
+    if (badge) {
+        badge.style.background = '#d97706';
+        badge.innerText = `EDITANDO: ${numMuestra}`;
+    }
+
+    // 3. Revelar los botones operativos y ocultar el de editar para no duplicar
+    const btnCalcular = document.getElementById('btn-calcular');
+    const btnGuardarDB = document.getElementById('btn-guardar-db');
+    const btnAgregar = document.getElementById('btn-agregar-lab');
+    const btnPdf = document.getElementById('btn-pdf');
+    const btnEditar = document.getElementById('btn-editar-datos');
+
+    if (btnCalcular) btnCalcular.style.display = 'inline-flex';
+    if (btnGuardarDB) btnGuardarDB.style.display = 'inline-flex';
+    if (btnAgregar) btnAgregar.style.display = 'inline-flex';
+    if (btnPdf) btnPdf.style.display = 'inline-flex';
+    if (btnEditar) btnEditar.style.display = 'none'; // Ocultar el botón editar una vez activado
+
+    // 4. Notificación visual
+    const toast = document.getElementById('status-toast');
+    if (toast) {
+        toast.style.display = 'block';
+        toast.innerText = '🔓 Edición habilitada: Modifique los valores y guarde los cambios.';
+        setTimeout(() => { toast.style.display = 'none'; }, 3500);
+    }
+}
+
+        async function exportarPDF() {
+            const participantesData = obtenerParticipantesData();
+            if (participantesData.length === 0) {
+                alert("Ingresa al menos un participante con mediciones.");
+                return;
+            }
+
+            const payload = {
+                num_muestra: document.getElementById('input-num-muestra').value,
+                metodo: document.getElementById('select-metodo').value,
+                observaciones: document.getElementById('input-observaciones')?.value || "", // <-- Agregar esta líne
+                participantes: participantesData
+            };
+
+            const resp = await fetch('/exportar_pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Reporte_${payload.num_muestra}.pdf`;
+            a.click();
+        }
+        document.getElementById('tabla-body').addEventListener('keydown', function(e) {
+    const teclasPermitidas = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+    if (!teclasPermitidas.includes(e.key)) return;
+
+    const inputActual = e.target;
+    if (!inputActual.classList.contains('celda-medicion')) return;
+
+    const filaActual = inputActual.closest('tr');
+    if (!filaActual) return;
+
+    const filas = Array.from(document.querySelectorAll('#tabla-body tr'));
+    const indiceFila = filas.indexOf(filaActual);
+
+    const inputsDeLaFila = Array.from(filaActual.querySelectorAll('.celda-medicion'));
+    const indiceColumna = inputsDeLaFila.indexOf(inputActual);
+
+    let siguienteInput = null;
+
+    switch (e.key) {
+        case 'ArrowRight':
+            if (indiceColumna < inputsDeLaFila.length - 1) {
+                siguienteInput = inputsDeLaFila[indiceColumna + 1];
+            } else if (indiceFila < filas.length - 1) {
+                // Si llega al final de la fila, pasa al primer input de la siguiente fila
+                const siguienteFilaInputs = filas[indiceFila + 1].querySelectorAll('.celda-medicion');
+                if (siguienteFilaInputs.length > 0) siguienteInput = siguienteFilaInputs[0];
+            }
+            break;
+
+        case 'ArrowLeft':
+            if (indiceColumna > 0) {
+                siguienteInput = inputsDeLaFila[indiceColumna - 1];
+            } else if (indiceFila > 0) {
+                // Si está al inicio de la fila, pasa al último input de la fila anterior
+                const filaAnteriorInputs = filas[indiceFila - 1].querySelectorAll('.celda-medicion');
+                if (filaAnteriorInputs.length > 0) siguienteInput = filaAnteriorInputs[filaAnteriorInputs.length - 1];
+            }
+            break;
+
+        case 'ArrowUp':
+            if (indiceFila > 0) {
+                const filaAnteriorInputs = filas[indiceFila - 1].querySelectorAll('.celda-medicion');
+                // Intenta ir a la misma columna o a la última disponible
+                siguienteInput = filaAnteriorInputs[Math.min(indiceColumna, filaAnteriorInputs.length - 1)];
+            }
+            break;
+
+        case 'ArrowDown':
+            if (indiceFila < filas.length - 1) {
+                const siguienteFilaInputs = filas[indiceFila + 1].querySelectorAll('.celda-medicion');
+                // Intenta ir a la misma columna o a la última disponible
+                siguienteInput = siguienteFilaInputs[Math.min(indiceColumna, siguienteFilaInputs.length - 1)];
+            }
+            break;
+    }
+
+    if (siguienteInput) {
+        e.preventDefault(); // Evita que el cursor de texto se desplace dentro del valor del input
+        siguienteInput.focus();
+        siguienteInput.select(); // Selecciona el texto completo para sobrescribir rápidamente
+    }
+});
+
+      window.addEventListener('DOMContentLoaded', async () => {
+            if (typeof initChart === 'function') initChart();
+            if (typeof initMandelCharts === 'function') initMandelCharts();
+
+            // Cargar menú desplegable dinámico de métodos desde PostgreSQL/SQLite
+            await cargarMetodosSelect();
+
+            // 1. Leer parámetros de URL y localStorage
+            const urlParams = new URLSearchParams(window.location.search);
+            const muestraURL = urlParams.get('muestra');
+            const muestraLocalStorage = localStorage.getItem('muestra_para_consola');
+
+            const numMuestra = muestraLocalStorage || muestraURL;
+
+            if (numMuestra) {
+                if (muestraLocalStorage) localStorage.removeItem('muestra_para_consola');
+
+                try {
+                    const respuesta = await fetch(`/obtener_muestra/${encodeURIComponent(numMuestra)}`);
+                    if (!respuesta.ok) throw new Error("No se pudo obtener la información de la muestra.");
+
+                    const data = await respuesta.json();
+
+                    // Configurar Banner de Inspección
+                    const banner = document.getElementById('banner-inspeccion');
+                    if (banner) {
+                        banner.style.display = 'flex';
+                        banner.style.borderColor = '#3b82f6';
+                        banner.style.borderLeft = '5px solid #2563eb';
+
+                        const titulo = banner.querySelector('strong');
+                        if (titulo) {
+                            titulo.style.color = '#60a5fa';
+                            titulo.innerText = '🔎 MODO INSPECCIÓN DE REGISTRO HISTÓRICO';
+                        }
+                        const subtitulo = banner.querySelector('p');
+                        if (subtitulo) {
+                            subtitulo.innerText = 'Visualizando muestra almacenada en SQLite. Todos los estadísticos y dictámenes están evaluados.';
+                        }
+                    }
+
+                    document.getElementById('badge-registro-id').innerText = `MUESTRA: ${data.num_muestra}`;
+
+                    // Visibilidad de Botones en Modo Inspección
+                    document.getElementById('btn-limpiar').style.display = 'none';
+                    document.getElementById('btn-calcular').style.display = 'none';
+                    document.getElementById('btn-guardar-db').style.display = 'none';
+                    document.getElementById('btn-eliminar-registro').style.display = 'inline-flex';
+                    document.getElementById('btn-pdf').style.display = 'inline-flex';
+
+                    // REVELAR EL BOTÓN DE EDITAR SOLO AL INSPECCIONAR
+                    const btnEditar = document.getElementById('btn-editar-datos');
+                    if (btnEditar) btnEditar.style.display = 'inline-flex';
+
+                    document.getElementById('input-num-muestra').value = data.num_muestra || numMuestra;
+                    document.getElementById('select-metodo').value = data.metodo || "ASTM D1121";
+                    document.getElementById('input-observaciones').value = data.observaciones || "";
+                    const tbody = document.getElementById('tabla-body');
+                    if (tbody) tbody.innerHTML = '';
+                    contadorParticipantes = 0;
+
+                    if (data.resumen && data.resumen.length > 0) {
+                        data.resumen.forEach(p => {
+                            agregarParticipante(p.nombre, p.valores);
+                        });
+                    }
+
+                    renderizarRespuestasBackend(data);
+                    activarModoLectura();
+
+                } catch (err) {
+                    console.error(err);
+                    alert("No se pudo cargar el registro seleccionado.");
+                    window.location.href = "/registros";
+                }
+            } else {
+                // MODO CAPTURA LIBRE / CONSOLA EN BLANCO
+                desactivarModoLectura();
+                document.getElementById('banner-inspeccion').style.display = 'none';
+                document.getElementById('btn-eliminar-registro').style.display = 'none';
+                document.getElementById('btn-guardar-db').style.display = 'none';
+                document.getElementById('btn-pdf').style.display = 'none';
+
+
+                const btnEditar = document.getElementById('btn-editar-datos');
+                if (btnEditar) btnEditar.style.display = 'none';
+
+
+                limpiarConsola();
+               //cargarDatosPrueba();
+            }
+        });
+    </script>
+</body>
+</html>
