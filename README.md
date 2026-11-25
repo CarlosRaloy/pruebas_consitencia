@@ -7,7 +7,6 @@ Aplicación web desarrollada en Django 5.2  para el cálculo estadístico interl
 * **Cálculos estadísticos ISO 5725-2:** Evaluación de consistencia  mediante pruebas de Mandel (h y k), Cochran y Grubbs, con generación de gráficas y reportes en `.xlsx` y `.pdf`.
 
 * **Autenticación y sesiones:** Rutas de acceso (`/login`). 
-* **Gestión de archivos estáticos:** Soporte de estáticos (`logo.png`, `logo2.png`, etc.) mediante `WhiteNoise` en modo `DEBUG=False`.
 
 ## Estructura del proyecto
 
