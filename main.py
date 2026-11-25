@@ -102,7 +102,6 @@ if not settings.configured:
         ],
         MIDDLEWARE=[
             "django.middleware.security.SecurityMiddleware",
-            "whitenoise.middleware.WhiteNoiseMiddleware",
             "django.contrib.sessions.middleware.SessionMiddleware",
             "django.middleware.common.CommonMiddleware",
             "django.middleware.csrf.CsrfViewMiddleware",
@@ -815,7 +814,7 @@ def logout_view(request):
 
 @login_required
 def read_index(request):
-    return render(request, "index.html")
+    return render(request, "vista1.html")
 
 
 @login_required
@@ -1492,7 +1491,7 @@ urlpatterns = [
     path("login", login_view),
     path("logout", logout_view),
     path("", read_index),
-    path("index.html", read_index),
+    path("vista1.html", read_index),
     path("consola", read_index),
     path("registros", read_registros),
     path("registros.html", read_registros),
