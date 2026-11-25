@@ -11,14 +11,14 @@ Aplicación web desarrollada en Django 5.2  para el cálculo estadístico interl
 
 ## Estructura del proyecto
 
+
 ```text
 PythonProject10/
-├── .venv/                  # Entorno virtual Python 3.10
 ├── static/                 # Archivos estáticos (logo.png, logo2.png)
 ├── staticfiles/            # Estáticos recolectados para DEBUG=False / producción
 ├── templates/
 │   ├── login.html          # Vista de inicio de sesión
-│   ├── index.html          # Consola principal de cálculos
+│   ├── vista1.html          # Consola principal de cálculos
 │   └── registros.html      # Historial y consulta de registros
 ├── .env                    # Variables de entorno y credenciales 
 ├── main.py                 # Codigo principal vistas, calculos, seguridad, bases de datos.
