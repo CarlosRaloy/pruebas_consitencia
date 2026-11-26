@@ -190,7 +190,12 @@ TABLA_GRUBBS = {
     39: {2: {"1%": 3.369, "5%": 0.267}, 3: {"1%": 0.5789, "5%": 0.6382}},
     40: {2: {"1%": 3.381, "5%": 0.267}, 3: {"1%": 0.5862, "5%": 0.6445}},
 }
-
+def formatear_fecha_local(dt, fmt="%Y-%m-%d"):
+    if not dt:
+        return "-"
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt).strftime(fmt)
 
 def parse_json_body(request) -> dict:
     content_type = request.headers.get("Content-Type", "")
@@ -688,7 +693,7 @@ def obtener_registros(request):
             except Exception:
                 logger.warning('accion=obtener_registros estado=warn registro_id=%s motivo="dictamen_grubbs_invalido"', e.id)
 
-        fecha_str = timezone.localtime(e.fecha_registro).strftime("%Y-%m-%d") if e.fecha_registro else "-"
+        fecha_str = formatear_fecha_local(e.fecha_registro, "%Y-%m-%d")
         resultado.append({
             "id": e.id,
             "fecha": fecha_str,

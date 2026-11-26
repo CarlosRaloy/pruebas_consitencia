@@ -9,7 +9,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class AppVersionFilter(logging.Filter):
-    """Inyecta la versión activa de la aplicación en cada registro de log."""
+
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.app_version = APP_VERSION

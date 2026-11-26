@@ -6,7 +6,7 @@ SETTINGS_DIR = Path(__file__).resolve().parent
 BASE_DIR = SETTINGS_DIR.parent
 
 def load_dotenv_strict(env_path: Path):
-    """Carga variables desde .env sin sobrescribir variables reales del entorno/venv."""
+
     if env_path.exists():
         for line in env_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
