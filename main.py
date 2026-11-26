@@ -3,13 +3,12 @@ import sys
 import io
 import json
 import math
-import logging
 import datetime
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.pagesizes import letter
@@ -24,62 +23,28 @@ from django.utils import timezone
 from django.utils.html import escape
 from django.urls import path
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, FileResponse, HttpResponse
+from django.http import JsonResponse, FileResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.middleware.csrf import get_token
 from django.conf.urls.static import static
-
-
+from settings.logging_config import APP_VERSION, get_logger
 BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(BASE_DIR / "security_audit.log", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger("astm_security")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings.settings")
+django.setup()
 
 
-def load_dotenv_strict(env_path: Path):
-    """Carga variables desde .env sin sobrescribir variables reales del entorno/venv."""
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, val = line.split("=", 1)
-            os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+
+logger = get_logger("main")
 
 
-load_dotenv_strict(BASE_DIR / ".env")
-
-REQUIRED_ENV_VARS = [
-    "SECRET_KEY",
-    "ALLOWED_HOSTS",
-    "DB_NAME",
-    "DB_USER",
-    "DB_PASSWORD",
-    "DB_HOST",
-]
-missing_vars = [v for v in REQUIRED_ENV_VARS if not os.environ.get(v, "").strip()]
-if missing_vars:
-    raise RuntimeError(
-        f"[SEGURIDAD] Faltan variables obligatorias en el entorno o archivo .env: {', '.join(missing_vars)}"
-    )
-
-DEBUG_MODE = os.environ.get("DEBUG", "False").lower() in ("true", "1", "yes")
-USE_HTTPS = os.environ.get("USE_HTTPS", "False").lower() in ("true", "1", "yes")
-ALLOWED_HOSTS_LIST = [
-    h.strip() for h in os.environ["ALLOWED_HOSTS"].split(",") if h.strip() and h.strip() != "*"
-]
-if not ALLOWED_HOSTS_LIST:
-    raise RuntimeError("[SEGURIDAD] ALLOWED_HOSTS no puede estar vacío ni usar '*' en modo blindado.")
 class AutoCsrfAndHeadersMiddleware:
+    """Agrega cabeceras de seguridad y respuesta sin reescribir el HTML."""
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -87,122 +52,11 @@ class AutoCsrfAndHeadersMiddleware:
         response = self.get_response(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        if "text/html" in response.get("Content-Type", ""):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
         return response
-if not settings.configured:
-    settings.configure(
-        DEBUG=DEBUG_MODE,
-        SECRET_KEY=os.environ["SECRET_KEY"],
-        ALLOWED_HOSTS=ALLOWED_HOSTS_LIST,
-        INSTALLED_APPS=[
-            "django.contrib.contenttypes",
-            "django.contrib.auth",
-            "django.contrib.sessions",
-            "django.contrib.staticfiles",
-            "__main__",
-        ],
-        MIDDLEWARE=[
-            "django.middleware.security.SecurityMiddleware",
-            "django.contrib.sessions.middleware.SessionMiddleware",
-            "django.middleware.common.CommonMiddleware",
-            "django.middleware.csrf.CsrfViewMiddleware",
-            "django.contrib.auth.middleware.AuthenticationMiddleware",
-            "django.middleware.clickjacking.XFrameOptionsMiddleware",
-        ],
-        ROOT_URLCONF=__name__,
-        LOGIN_URL="/login",
-        LOGIN_REDIRECT_URL="/",
-        LOGOUT_REDIRECT_URL="/login",
-        TEMPLATES=[
-            {
-                "BACKEND": "django.template.backends.django.DjangoTemplates",
-                "DIRS": [BASE_DIR / "templates"],
-                "APP_DIRS": True,
-                "OPTIONS": {
-                    "context_processors": [
-                        "django.template.context_processors.request",
-                        "django.contrib.auth.context_processors.auth",
-                    ],
-                },
-            }
-        ],
-        DATABASES={
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": os.environ["DB_NAME"],
-                "USER": os.environ["DB_USER"],
-                "PASSWORD": os.environ["DB_PASSWORD"],
-                "HOST": os.environ["DB_HOST"],
-                "PORT": os.environ.get("DB_PORT", "5432"),
-                "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "600")),
-                "OPTIONS": {
-                    "connect_timeout": 10,
-                },
-            }
-        },
-
-        SESSION_ENGINE="django.contrib.sessions.backends.db",
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE="Strict",
-        SESSION_COOKIE_SECURE=USE_HTTPS,
-        SESSION_COOKIE_AGE=28800,
-        SESSION_EXPIRE_AT_BROWSER_CLOSE=True,
-
-        CSRF_COOKIE_HTTPONLY=False,
-        CSRF_COOKIE_SAMESITE="Strict",
-        CSRF_COOKIE_SECURE=USE_HTTPS,
-        CSRF_TRUSTED_ORIGINS=[
-            f"{'https' if USE_HTTPS else 'http'}://{h}" for h in ALLOWED_HOSTS_LIST
-        ],
-
-        SECURE_CONTENT_TYPE_NOSNIFF=True,
-        X_FRAME_OPTIONS="DENY",
-        SECURE_REFERRER_POLICY="same-origin",
-        SECURE_SSL_REDIRECT=USE_HTTPS,
-        SECURE_HSTS_SECONDS=31536000 if USE_HTTPS else 0,
-        SECURE_HSTS_INCLUDE_SUBDOMAINS=USE_HTTPS,
-
-        DATA_UPLOAD_MAX_MEMORY_SIZE=2621440,
-        FILE_UPLOAD_MAX_MEMORY_SIZE=2621440,
-
-        STATIC_URL="/static/",
-        STATICFILES_DIRS=[BASE_DIR / "static"] if (BASE_DIR / "static").exists() else [],
-        STATIC_ROOT=BASE_DIR / "staticfiles",
-        USE_TZ=True,
-        TIME_ZONE=os.environ.get("TIME_ZONE", "America/Mexico_City"),
-        DEFAULT_AUTO_FIELD="django.db.models.BigAutoField",
-    )
-
-django.setup()
-
-
-
-
-class AutoCsrfAndHeadersMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        response = self.get_response(request)
-        response.setdefault("X-Content-Type-Options", "nosniff")
-        return response
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        response = self.get_response(request)
-        response["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response["Pragma"] = "no-cache"
-
-        content_type = response.get("Content-Type", "")
-        if "text/html" in content_type and hasattr(response, "content") and b"</body>" in response.content:
-            get_token(request)  # Asegura que la cookie csrftoken se envíe al navegador
-            response.content = response.content.replace(b"</body>", self.CSRF_JS_SNIPPET, 1)
-            if response.has_header("Content-Length"):
-                response["Content-Length"] = str(len(response.content))
-        return response
-
 
 
 class MuestraEnsayoDB(models.Model):
@@ -229,115 +83,113 @@ class MetodoNormativoDB(models.Model):
         ordering = ["nombre"]
 
 
-
 TABLA_MANDEL = {
-    3: {'h': 1.15, 'k': {2: 1.65, 3: 1.53, 4: 1.45, 5: 1.40, 6: 1.37, 7: 1.34, 8: 1.32, 9: 1.30, 10: 1.29}},
-    4: {'h': 1.42, 'k': {2: 1.76, 3: 1.59, 4: 1.50, 5: 1.44, 6: 1.40, 7: 1.37, 8: 1.35, 9: 1.33, 10: 1.31}},
-    5: {'h': 1.57, 'k': {2: 1.81, 3: 1.62, 4: 1.53, 5: 1.46, 6: 1.42, 7: 1.39, 8: 1.36, 9: 1.34, 10: 1.32}},
-    6: {'h': 1.66, 'k': {2: 1.85, 3: 1.64, 4: 1.54, 5: 1.48, 6: 1.43, 7: 1.40, 8: 1.37, 9: 1.35, 10: 1.33}},
-    7: {'h': 1.71, 'k': {2: 1.87, 3: 1.66, 4: 1.55, 5: 1.49, 6: 1.44, 7: 1.41, 8: 1.38, 9: 1.36, 10: 1.34}},
-    8: {'h': 1.75, 'k': {2: 1.88, 3: 1.67, 4: 1.56, 5: 1.50, 6: 1.45, 7: 1.41, 8: 1.38, 9: 1.36, 10: 1.34}},
-    9: {'h': 1.78, 'k': {2: 1.90, 3: 1.68, 4: 1.57, 5: 1.50, 6: 1.45, 7: 1.42, 8: 1.39, 9: 1.36, 10: 1.35}},
-    10: {'h': 1.80, 'k': {2: 1.90, 3: 1.68, 4: 1.57, 5: 1.50, 6: 1.46, 7: 1.42, 8: 1.39, 9: 1.37, 10: 1.35}},
-    11: {'h': 1.82, 'k': {2: 1.91, 3: 1.69, 4: 1.58, 5: 1.51, 6: 1.46, 7: 1.42, 8: 1.39, 9: 1.37, 10: 1.35}},
-    12: {'h': 1.83, 'k': {2: 1.92, 3: 1.69, 4: 1.58, 5: 1.51, 6: 1.46, 7: 1.42, 8: 1.40, 9: 1.37, 10: 1.35}},
-    13: {'h': 1.84, 'k': {2: 1.92, 3: 1.69, 4: 1.58, 5: 1.51, 6: 1.46, 7: 1.43, 8: 1.40, 9: 1.37, 10: 1.35}},
-    14: {'h': 1.85, 'k': {2: 1.92, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.37, 10: 1.35}},
-    15: {'h': 1.86, 'k': {2: 1.93, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
-    16: {'h': 1.86, 'k': {2: 1.93, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
-    17: {'h': 1.87, 'k': {2: 1.93, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
-    18: {'h': 1.88, 'k': {2: 1.93, 3: 1.71, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
-    19: {'h': 1.88, 'k': {2: 1.93, 3: 1.71, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
-    20: {'h': 1.89, 'k': {2: 1.94, 3: 1.71, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
-    21: {'h': 1.89, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.52, 6: 1.47, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    22: {'h': 1.89, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.52, 6: 1.47, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    23: {'h': 1.90, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.47, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    24: {'h': 1.90, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    25: {'h': 1.90, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    26: {'h': 1.90, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    27: {'h': 1.91, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    28: {'h': 1.91, 'k': {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    29: {'h': 1.91, 'k': {2: 1.94, 3: 1.72, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
-    30: {'h': 1.91, 'k': {2: 1.94, 3: 1.72, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    3: {"h": 1.15, "k": {2: 1.65, 3: 1.53, 4: 1.45, 5: 1.40, 6: 1.37, 7: 1.34, 8: 1.32, 9: 1.30, 10: 1.29}},
+    4: {"h": 1.42, "k": {2: 1.76, 3: 1.59, 4: 1.50, 5: 1.44, 6: 1.40, 7: 1.37, 8: 1.35, 9: 1.33, 10: 1.31}},
+    5: {"h": 1.57, "k": {2: 1.81, 3: 1.62, 4: 1.53, 5: 1.46, 6: 1.42, 7: 1.39, 8: 1.36, 9: 1.34, 10: 1.32}},
+    6: {"h": 1.66, "k": {2: 1.85, 3: 1.64, 4: 1.54, 5: 1.48, 6: 1.43, 7: 1.40, 8: 1.37, 9: 1.35, 10: 1.33}},
+    7: {"h": 1.71, "k": {2: 1.87, 3: 1.66, 4: 1.55, 5: 1.49, 6: 1.44, 7: 1.41, 8: 1.38, 9: 1.36, 10: 1.34}},
+    8: {"h": 1.75, "k": {2: 1.88, 3: 1.67, 4: 1.56, 5: 1.50, 6: 1.45, 7: 1.41, 8: 1.38, 9: 1.36, 10: 1.34}},
+    9: {"h": 1.78, "k": {2: 1.90, 3: 1.68, 4: 1.57, 5: 1.50, 6: 1.45, 7: 1.42, 8: 1.39, 9: 1.36, 10: 1.35}},
+    10: {"h": 1.80, "k": {2: 1.90, 3: 1.68, 4: 1.57, 5: 1.50, 6: 1.46, 7: 1.42, 8: 1.39, 9: 1.37, 10: 1.35}},
+    11: {"h": 1.82, "k": {2: 1.91, 3: 1.69, 4: 1.58, 5: 1.51, 6: 1.46, 7: 1.42, 8: 1.39, 9: 1.37, 10: 1.35}},
+    12: {"h": 1.83, "k": {2: 1.92, 3: 1.69, 4: 1.58, 5: 1.51, 6: 1.46, 7: 1.42, 8: 1.40, 9: 1.37, 10: 1.35}},
+    13: {"h": 1.84, "k": {2: 1.92, 3: 1.69, 4: 1.58, 5: 1.51, 6: 1.46, 7: 1.43, 8: 1.40, 9: 1.37, 10: 1.35}},
+    14: {"h": 1.85, "k": {2: 1.92, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.37, 10: 1.35}},
+    15: {"h": 1.86, "k": {2: 1.93, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
+    16: {"h": 1.86, "k": {2: 1.93, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
+    17: {"h": 1.87, "k": {2: 1.93, 3: 1.70, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
+    18: {"h": 1.88, "k": {2: 1.93, 3: 1.71, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
+    19: {"h": 1.88, "k": {2: 1.93, 3: 1.71, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
+    20: {"h": 1.89, "k": {2: 1.94, 3: 1.71, 4: 1.59, 5: 1.52, 6: 1.47, 7: 1.43, 8: 1.40, 9: 1.38, 10: 1.36}},
+    21: {"h": 1.89, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.52, 6: 1.47, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    22: {"h": 1.89, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.52, 6: 1.47, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    23: {"h": 1.90, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.47, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    24: {"h": 1.90, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    25: {"h": 1.90, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    26: {"h": 1.90, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    27: {"h": 1.91, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    28: {"h": 1.91, "k": {2: 1.94, 3: 1.71, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    29: {"h": 1.91, "k": {2: 1.94, 3: 1.72, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
+    30: {"h": 1.91, "k": {2: 1.94, 3: 1.72, 4: 1.60, 5: 1.53, 6: 1.48, 7: 1.44, 8: 1.41, 9: 1.38, 10: 1.36}},
 }
 
 TABLA_COCHRAN = {
-    2: {3: {'1%': 0.995, '5%': 0.975}, 4: {'1%': 0.979, '5%': 0.939}, 5: {'1%': 0.959, '5%': 0.906}, 6: {'1%': 0.937, '5%': 0.877}},
-    3: {2: {'1%': 0.993, '5%': 0.967}, 3: {'1%': 0.942, '5%': 0.871}, 4: {'1%': 0.883, '5%': 0.798}, 5: {'1%': 0.834, '5%': 0.746}, 6: {'1%': 0.793, '5%': 0.707}},
-    4: {2: {'1%': 0.968, '5%': 0.906}, 3: {'1%': 0.864, '5%': 0.768}, 4: {'1%': 0.781, '5%': 0.684}, 5: {'1%': 0.721, '5%': 0.629}, 6: {'1%': 0.676, '5%': 0.590}},
-    5: {2: {'1%': 0.928, '5%': 0.841}, 3: {'1%': 0.788, '5%': 0.684}, 4: {'1%': 0.696, '5%': 0.598}, 5: {'1%': 0.633, '5%': 0.544}, 6: {'1%': 0.588, '5%': 0.506}},
-    6: {2: {'1%': 0.883, '5%': 0.781}, 3: {'1%': 0.722, '5%': 0.616}, 4: {'1%': 0.626, '5%': 0.532}, 5: {'1%': 0.564, '5%': 0.480}, 6: {'1%': 0.520, '5%': 0.445}},
-    7: {2: {'1%': 0.838, '5%': 0.727}, 3: {'1%': 0.664, '5%': 0.561}, 4: {'1%': 0.568, '5%': 0.480}, 5: {'1%': 0.508, '5%': 0.431}, 6: {'1%': 0.466, '5%': 0.397}},
-    8: {2: {'1%': 0.794, '5%': 0.680}, 3: {'1%': 0.615, '5%': 0.516}, 4: {'1%': 0.521, '5%': 0.438}, 5: {'1%': 0.463, '5%': 0.391}, 6: {'1%': 0.423, '5%': 0.360}},
-    9: {2: {'1%': 0.754, '5%': 0.638}, 3: {'1%': 0.573, '5%': 0.478}, 4: {'1%': 0.481, '5%': 0.403}, 5: {'1%': 0.425, '5%': 0.358}, 6: {'1%': 0.387, '5%': 0.329}},
-    10: {2: {'1%': 0.718, '5%': 0.602}, 3: {'1%': 0.536, '5%': 0.445}, 4: {'1%': 0.447, '5%': 0.373}, 5: {'1%': 0.393, '5%': 0.331}, 6: {'1%': 0.357, '5%': 0.303}},
-    11: {2: {'1%': 0.684, '5%': 0.570}, 3: {'1%': 0.504, '5%': 0.417}, 4: {'1%': 0.418, '5%': 0.348}, 5: {'1%': 0.366, '5%': 0.308}, 6: {'1%': 0.332, '5%': 0.281}},
-    12: {2: {'1%': 0.653, '5%': 0.541}, 3: {'1%': 0.475, '5%': 0.392}, 4: {'1%': 0.392, '5%': 0.326}, 5: {'1%': 0.343, '5%': 0.288}, 6: {'1%': 0.310, '5%': 0.262}},
-    13: {2: {'1%': 0.624, '5%': 0.515}, 3: {'1%': 0.450, '5%': 0.371}, 4: {'1%': 0.369, '5%': 0.307}, 5: {'1%': 0.322, '5%': 0.271}, 6: {'1%': 0.291, '5%': 0.243}},
-    14: {2: {'1%': 0.599, '5%': 0.492}, 3: {'1%': 0.427, '5%': 0.352}, 4: {'1%': 0.349, '5%': 0.291}, 5: {'1%': 0.304, '5%': 0.255}, 6: {'1%': 0.274, '5%': 0.232}},
-    15: {2: {'1%': 0.575, '5%': 0.471}, 3: {'1%': 0.407, '5%': 0.335}, 4: {'1%': 0.332, '5%': 0.276}, 5: {'1%': 0.288, '5%': 0.242}, 6: {'1%': 0.259, '5%': 0.220}},
-    16: {2: {'1%': 0.553, '5%': 0.452}, 3: {'1%': 0.388, '5%': 0.319}, 4: {'1%': 0.316, '5%': 0.262}, 5: {'1%': 0.274, '5%': 0.230}, 6: {'1%': 0.246, '5%': 0.208}},
-    17: {2: {'1%': 0.532, '5%': 0.434}, 3: {'1%': 0.372, '5%': 0.305}, 4: {'1%': 0.301, '5%': 0.250}, 5: {'1%': 0.261, '5%': 0.219}, 6: {'1%': 0.234, '5%': 0.198}},
-    18: {2: {'1%': 0.514, '5%': 0.418}, 3: {'1%': 0.356, '5%': 0.293}, 4: {'1%': 0.288, '5%': 0.240}, 5: {'1%': 0.249, '5%': 0.209}, 6: {'1%': 0.223, '5%': 0.189}},
-    19: {2: {'1%': 0.496, '5%': 0.403}, 3: {'1%': 0.343, '5%': 0.281}, 4: {'1%': 0.276, '5%': 0.230}, 5: {'1%': 0.238, '5%': 0.200}, 6: {'1%': 0.214, '5%': 0.181}},
-    20: {2: {'1%': 0.480, '5%': 0.389}, 3: {'1%': 0.330, '5%': 0.270}, 4: {'1%': 0.265, '5%': 0.220}, 5: {'1%': 0.229, '5%': 0.192}, 6: {'1%': 0.205, '5%': 0.174}},
-    21: {2: {'1%': 0.465, '5%': 0.377}, 3: {'1%': 0.318, '5%': 0.261}, 4: {'1%': 0.255, '5%': 0.212}, 5: {'1%': 0.220, '5%': 0.185}, 6: {'1%': 0.197, '5%': 0.167}},
-    22: {2: {'1%': 0.450, '5%': 0.365}, 3: {'1%': 0.307, '5%': 0.252}, 4: {'1%': 0.246, '5%': 0.204}, 5: {'1%': 0.212, '5%': 0.178}, 6: {'1%': 0.189, '5%': 0.160}},
-    23: {2: {'1%': 0.437, '5%': 0.354}, 3: {'1%': 0.297, '5%': 0.243}, 4: {'1%': 0.238, '5%': 0.197}, 5: {'1%': 0.204, '5%': 0.172}, 6: {'1%': 0.182, '5%': 0.155}},
-    24: {2: {'1%': 0.425, '5%': 0.343}, 3: {'1%': 0.287, '5%': 0.235}, 4: {'1%': 0.230, '5%': 0.191}, 5: {'1%': 0.197, '5%': 0.166}, 6: {'1%': 0.176, '5%': 0.149}},
-    25: {2: {'1%': 0.413, '5%': 0.334}, 3: {'1%': 0.278, '5%': 0.228}, 4: {'1%': 0.222, '5%': 0.185}, 5: {'1%': 0.190, '5%': 0.160}, 6: {'1%': 0.170, '5%': 0.144}},
-    26: {2: {'1%': 0.402, '5%': 0.325}, 3: {'1%': 0.270, '5%': 0.221}, 4: {'1%': 0.215, '5%': 0.179}, 5: {'1%': 0.184, '5%': 0.155}, 6: {'1%': 0.164, '5%': 0.140}},
-    27: {2: {'1%': 0.391, '5%': 0.316}, 3: {'1%': 0.262, '5%': 0.215}, 4: {'1%': 0.209, '5%': 0.173}, 5: {'1%': 0.179, '5%': 0.150}, 6: {'1%': 0.159, '5%': 0.135}},
-    28: {2: {'1%': 0.382, '5%': 0.308}, 3: {'1%': 0.255, '5%': 0.209}, 4: {'1%': 0.202, '5%': 0.168}, 5: {'1%': 0.173, '5%': 0.146}, 6: {'1%': 0.154, '5%': 0.131}},
-    29: {2: {'1%': 0.372, '5%': 0.300}, 3: {'1%': 0.248, '5%': 0.203}, 4: {'1%': 0.196, '5%': 0.164}, 5: {'1%': 0.168, '5%': 0.142}, 6: {'1%': 0.150, '5%': 0.127}},
-    30: {2: {'1%': 0.363, '5%': 0.293}, 3: {'1%': 0.241, '5%': 0.198}, 4: {'1%': 0.191, '5%': 0.159}, 5: {'1%': 0.164, '5%': 0.138}, 6: {'1%': 0.145, '5%': 0.124}},
-    31: {2: {'1%': 0.355, '5%': 0.286}, 3: {'1%': 0.235, '5%': 0.193}, 4: {'1%': 0.186, '5%': 0.155}, 5: {'1%': 0.159, '5%': 0.134}, 6: {'1%': 0.141, '5%': 0.120}},
-    32: {2: {'1%': 0.347, '5%': 0.280}, 3: {'1%': 0.229, '5%': 0.188}, 4: {'1%': 0.181, '5%': 0.151}, 5: {'1%': 0.155, '5%': 0.131}, 6: {'1%': 0.138, '5%': 0.117}},
-    33: {2: {'1%': 0.339, '5%': 0.273}, 3: {'1%': 0.224, '5%': 0.184}, 4: {'1%': 0.177, '5%': 0.147}, 5: {'1%': 0.151, '5%': 0.127}, 6: {'1%': 0.134, '5%': 0.114}},
-    34: {2: {'1%': 0.332, '5%': 0.267}, 3: {'1%': 0.218, '5%': 0.179}, 4: {'1%': 0.172, '5%': 0.144}, 5: {'1%': 0.147, '5%': 0.124}, 6: {'1%': 0.131, '5%': 0.111}}
+    2: {3: {"1%": 0.995, "5%": 0.975}, 4: {"1%": 0.979, "5%": 0.939}, 5: {"1%": 0.959, "5%": 0.906}, 6: {"1%": 0.937, "5%": 0.877}},
+    3: {2: {"1%": 0.993, "5%": 0.967}, 3: {"1%": 0.942, "5%": 0.871}, 4: {"1%": 0.883, "5%": 0.798}, 5: {"1%": 0.834, "5%": 0.746}, 6: {"1%": 0.793, "5%": 0.707}},
+    4: {2: {"1%": 0.968, "5%": 0.906}, 3: {"1%": 0.864, "5%": 0.768}, 4: {"1%": 0.781, "5%": 0.684}, 5: {"1%": 0.721, "5%": 0.629}, 6: {"1%": 0.676, "5%": 0.590}},
+    5: {2: {"1%": 0.928, "5%": 0.841}, 3: {"1%": 0.788, "5%": 0.684}, 4: {"1%": 0.696, "5%": 0.598}, 5: {"1%": 0.633, "5%": 0.544}, 6: {"1%": 0.588, "5%": 0.506}},
+    6: {2: {"1%": 0.883, "5%": 0.781}, 3: {"1%": 0.722, "5%": 0.616}, 4: {"1%": 0.626, "5%": 0.532}, 5: {"1%": 0.564, "5%": 0.480}, 6: {"1%": 0.520, "5%": 0.445}},
+    7: {2: {"1%": 0.838, "5%": 0.727}, 3: {"1%": 0.664, "5%": 0.561}, 4: {"1%": 0.568, "5%": 0.480}, 5: {"1%": 0.508, "5%": 0.431}, 6: {"1%": 0.466, "5%": 0.397}},
+    8: {2: {"1%": 0.794, "5%": 0.680}, 3: {"1%": 0.615, "5%": 0.516}, 4: {"1%": 0.521, "5%": 0.438}, 5: {"1%": 0.463, "5%": 0.391}, 6: {"1%": 0.423, "5%": 0.360}},
+    9: {2: {"1%": 0.754, "5%": 0.638}, 3: {"1%": 0.573, "5%": 0.478}, 4: {"1%": 0.481, "5%": 0.403}, 5: {"1%": 0.425, "5%": 0.358}, 6: {"1%": 0.387, "5%": 0.329}},
+    10: {2: {"1%": 0.718, "5%": 0.602}, 3: {"1%": 0.536, "5%": 0.445}, 4: {"1%": 0.447, "5%": 0.373}, 5: {"1%": 0.393, "5%": 0.331}, 6: {"1%": 0.357, "5%": 0.303}},
+    11: {2: {"1%": 0.684, "5%": 0.570}, 3: {"1%": 0.504, "5%": 0.417}, 4: {"1%": 0.418, "5%": 0.348}, 5: {"1%": 0.366, "5%": 0.308}, 6: {"1%": 0.332, "5%": 0.281}},
+    12: {2: {"1%": 0.653, "5%": 0.541}, 3: {"1%": 0.475, "5%": 0.392}, 4: {"1%": 0.392, "5%": 0.326}, 5: {"1%": 0.343, "5%": 0.288}, 6: {"1%": 0.310, "5%": 0.262}},
+    13: {2: {"1%": 0.624, "5%": 0.515}, 3: {"1%": 0.450, "5%": 0.371}, 4: {"1%": 0.369, "5%": 0.307}, 5: {"1%": 0.322, "5%": 0.271}, 6: {"1%": 0.291, "5%": 0.243}},
+    14: {2: {"1%": 0.599, "5%": 0.492}, 3: {"1%": 0.427, "5%": 0.352}, 4: {"1%": 0.349, "5%": 0.291}, 5: {"1%": 0.304, "5%": 0.255}, 6: {"1%": 0.274, "5%": 0.232}},
+    15: {2: {"1%": 0.575, "5%": 0.471}, 3: {"1%": 0.407, "5%": 0.335}, 4: {"1%": 0.332, "5%": 0.276}, 5: {"1%": 0.288, "5%": 0.242}, 6: {"1%": 0.259, "5%": 0.220}},
+    16: {2: {"1%": 0.553, "5%": 0.452}, 3: {"1%": 0.388, "5%": 0.319}, 4: {"1%": 0.316, "5%": 0.262}, 5: {"1%": 0.274, "5%": 0.230}, 6: {"1%": 0.246, "5%": 0.208}},
+    17: {2: {"1%": 0.532, "5%": 0.434}, 3: {"1%": 0.372, "5%": 0.305}, 4: {"1%": 0.301, "5%": 0.250}, 5: {"1%": 0.261, "5%": 0.219}, 6: {"1%": 0.234, "5%": 0.198}},
+    18: {2: {"1%": 0.514, "5%": 0.418}, 3: {"1%": 0.356, "5%": 0.293}, 4: {"1%": 0.288, "5%": 0.240}, 5: {"1%": 0.249, "5%": 0.209}, 6: {"1%": 0.223, "5%": 0.189}},
+    19: {2: {"1%": 0.496, "5%": 0.403}, 3: {"1%": 0.343, "5%": 0.281}, 4: {"1%": 0.276, "5%": 0.230}, 5: {"1%": 0.238, "5%": 0.200}, 6: {"1%": 0.214, "5%": 0.181}},
+    20: {2: {"1%": 0.480, "5%": 0.389}, 3: {"1%": 0.330, "5%": 0.270}, 4: {"1%": 0.265, "5%": 0.220}, 5: {"1%": 0.229, "5%": 0.192}, 6: {"1%": 0.205, "5%": 0.174}},
+    21: {2: {"1%": 0.465, "5%": 0.377}, 3: {"1%": 0.318, "5%": 0.261}, 4: {"1%": 0.255, "5%": 0.212}, 5: {"1%": 0.220, "5%": 0.185}, 6: {"1%": 0.197, "5%": 0.167}},
+    22: {2: {"1%": 0.450, "5%": 0.365}, 3: {"1%": 0.307, "5%": 0.252}, 4: {"1%": 0.246, "5%": 0.204}, 5: {"1%": 0.212, "5%": 0.178}, 6: {"1%": 0.189, "5%": 0.160}},
+    23: {2: {"1%": 0.437, "5%": 0.354}, 3: {"1%": 0.297, "5%": 0.243}, 4: {"1%": 0.238, "5%": 0.197}, 5: {"1%": 0.204, "5%": 0.172}, 6: {"1%": 0.182, "5%": 0.155}},
+    24: {2: {"1%": 0.425, "5%": 0.343}, 3: {"1%": 0.287, "5%": 0.235}, 4: {"1%": 0.230, "5%": 0.191}, 5: {"1%": 0.197, "5%": 0.166}, 6: {"1%": 0.176, "5%": 0.149}},
+    25: {2: {"1%": 0.413, "5%": 0.334}, 3: {"1%": 0.278, "5%": 0.228}, 4: {"1%": 0.222, "5%": 0.185}, 5: {"1%": 0.190, "5%": 0.160}, 6: {"1%": 0.170, "5%": 0.144}},
+    26: {2: {"1%": 0.402, "5%": 0.325}, 3: {"1%": 0.270, "5%": 0.221}, 4: {"1%": 0.215, "5%": 0.179}, 5: {"1%": 0.184, "5%": 0.155}, 6: {"1%": 0.164, "5%": 0.140}},
+    27: {2: {"1%": 0.391, "5%": 0.316}, 3: {"1%": 0.262, "5%": 0.215}, 4: {"1%": 0.209, "5%": 0.173}, 5: {"1%": 0.179, "5%": 0.150}, 6: {"1%": 0.159, "5%": 0.135}},
+    28: {2: {"1%": 0.382, "5%": 0.308}, 3: {"1%": 0.255, "5%": 0.209}, 4: {"1%": 0.202, "5%": 0.168}, 5: {"1%": 0.173, "5%": 0.146}, 6: {"1%": 0.154, "5%": 0.131}},
+    29: {2: {"1%": 0.372, "5%": 0.300}, 3: {"1%": 0.248, "5%": 0.203}, 4: {"1%": 0.196, "5%": 0.164}, 5: {"1%": 0.168, "5%": 0.142}, 6: {"1%": 0.150, "5%": 0.127}},
+    30: {2: {"1%": 0.363, "5%": 0.293}, 3: {"1%": 0.241, "5%": 0.198}, 4: {"1%": 0.191, "5%": 0.159}, 5: {"1%": 0.164, "5%": 0.138}, 6: {"1%": 0.145, "5%": 0.124}},
+    31: {2: {"1%": 0.355, "5%": 0.286}, 3: {"1%": 0.235, "5%": 0.193}, 4: {"1%": 0.186, "5%": 0.155}, 5: {"1%": 0.159, "5%": 0.134}, 6: {"1%": 0.141, "5%": 0.120}},
+    32: {2: {"1%": 0.347, "5%": 0.280}, 3: {"1%": 0.229, "5%": 0.188}, 4: {"1%": 0.181, "5%": 0.151}, 5: {"1%": 0.155, "5%": 0.131}, 6: {"1%": 0.138, "5%": 0.117}},
+    33: {2: {"1%": 0.339, "5%": 0.273}, 3: {"1%": 0.224, "5%": 0.184}, 4: {"1%": 0.177, "5%": 0.147}, 5: {"1%": 0.151, "5%": 0.127}, 6: {"1%": 0.134, "5%": 0.114}},
+    34: {2: {"1%": 0.332, "5%": 0.267}, 3: {"1%": 0.218, "5%": 0.179}, 4: {"1%": 0.172, "5%": 0.144}, 5: {"1%": 0.147, "5%": 0.124}, 6: {"1%": 0.131, "5%": 0.111}},
 }
 
 TABLA_GRUBBS = {
-    3: {2: {'1%': 1.155, '5%': 1.155}},
-    4: {2: {'1%': 1.496, '5%': 1.481}, 3: {'1%': 0.0000, '5%': 0.0002}},
-    5: {2: {'1%': 1.764, '5%': 1.715}, 3: {'1%': 0.0018, '5%': 0.0090}},
-    6: {2: {'1%': 1.973, '5%': 1.887}, 3: {'1%': 0.0116, '5%': 0.0349}},
-    7: {2: {'1%': 2.139, '5%': 2.020}, 3: {'1%': 0.0308, '5%': 0.0708}},
-    8: {2: {'1%': 2.274, '5%': 2.216}, 3: {'1%': 0.0563, '5%': 0.1101}},
-    9: {2: {'1%': 2.387, '5%': 2.215}, 3: {'1%': 0.0851, '5%': 0.1492}},
-    10: {2: {'1%': 2.482, '5%': 2.290}, 3: {'1%': 0.1150, '5%': 0.1864}},
-    11: {2: {'1%': 2.564, '5%': 2.355}, 3: {'1%': 0.1448, '5%': 0.2213}},
-    12: {2: {'1%': 2.636, '5%': 2.412}, 3: {'1%': 0.1738, '5%': 0.2537}},
-    13: {2: {'1%': 2.699, '5%': 2.462}, 3: {'1%': 0.2016, '5%': 0.2836}},
-    14: {2: {'1%': 2.755, '5%': 2.507}, 3: {'1%': 0.2280, '5%': 0.3112}},
-    15: {2: {'1%': 2.806, '5%': 2.549}, 3: {'1%': 0.2530, '5%': 0.3367}},
-    16: {2: {'1%': 2.852, '5%': 2.585}, 3: {'1%': 0.2767, '5%': 0.3603}},
-    17: {2: {'1%': 2.894, '5%': 2.620}, 3: {'1%': 0.2990, '5%': 0.3822}},
-    18: {2: {'1%': 2.932, '5%': 2.651}, 3: {'1%': 0.3200, '5%': 0.4025}},
-    19: {2: {'1%': 2.968, '5%': 2.681}, 3: {'1%': 0.3398, '5%': 0.4214}},
-    20: {2: {'1%': 3.001, '5%': 2.709}, 3: {'1%': 0.3585, '5%': 0.4391}},
-    21: {2: {'1%': 3.031, '5%': 0.267}, 3: {'1%': 0.3761, '5%': 0.4556}},
-    22: {2: {'1%': 3.060, '5%': 0.267}, 3: {'1%': 0.3927, '5%': 0.4711}},
-    23: {2: {'1%': 3.087, '5%': 0.267}, 3: {'1%': 0.4085, '5%': 0.4857}},
-    24: {2: {'1%': 3.112, '5%': 0.267}, 3: {'1%': 0.4234, '5%': 0.4994}},
-    25: {2: {'1%': 3.135, '5%': 0.267}, 3: {'1%': 0.4376, '5%': 0.5123}},
-    26: {2: {'1%': 3.157, '5%': 0.267}, 3: {'1%': 0.4510, '5%': 0.5245}},
-    27: {2: {'1%': 3.178, '5%': 0.267}, 3: {'1%': 0.4638, '5%': 0.5536}},
-    28: {2: {'1%': 3.199, '5%': 0.267}, 3: {'1%': 0.4759, '5%': 0.5470}},
-    29: {2: {'1%': 3.218, '5%': 0.267}, 3: {'1%': 0.4875, '5%': 0.5574}},
-    30: {2: {'1%': 3.236, '5%': 0.267}, 3: {'1%': 0.4985, '5%': 0.5672}},
-    31: {2: {'1%': 3.253, '5%': 0.267}, 3: {'1%': 0.5091, '5%': 0.5766}},
-    32: {2: {'1%': 3.270, '5%': 0.267}, 3: {'1%': 0.5192, '5%': 0.5856}},
-    33: {2: {'1%': 3.286, '5%': 0.267}, 3: {'1%': 0.5288, '5%': 0.5941}},
-    34: {2: {'1%': 3.301, '5%': 0.267}, 3: {'1%': 0.5381, '5%': 0.6023}},
-    35: {2: {'1%': 3.316, '5%': 0.267}, 3: {'1%': 0.5469, '5%': 0.6101}},
-    36: {2: {'1%': 3.330, '5%': 0.267}, 3: {'1%': 0.5554, '5%': 0.6175}},
-    37: {2: {'1%': 3.343, '5%': 0.267}, 3: {'1%': 0.5636, '5%': 0.6247}},
-    38: {2: {'1%': 3.356, '5%': 0.267}, 3: {'1%': 0.5724, '5%': 0.6316}},
-    39: {2: {'1%': 3.369, '5%': 0.267}, 3: {'1%': 0.5789, '5%': 0.6382}},
-    40: {2: {'1%': 3.381, '5%': 0.267}, 3: {'1%': 0.5862, '5%': 0.6445}}
+    3: {2: {"1%": 1.155, "5%": 1.155}},
+    4: {2: {"1%": 1.496, "5%": 1.481}, 3: {"1%": 0.0000, "5%": 0.0002}},
+    5: {2: {"1%": 1.764, "5%": 1.715}, 3: {"1%": 0.0018, "5%": 0.0090}},
+    6: {2: {"1%": 1.973, "5%": 1.887}, 3: {"1%": 0.0116, "5%": 0.0349}},
+    7: {2: {"1%": 2.139, "5%": 2.020}, 3: {"1%": 0.0308, "5%": 0.0708}},
+    8: {2: {"1%": 2.274, "5%": 2.216}, 3: {"1%": 0.0563, "5%": 0.1101}},
+    9: {2: {"1%": 2.387, "5%": 2.215}, 3: {"1%": 0.0851, "5%": 0.1492}},
+    10: {2: {"1%": 2.482, "5%": 2.290}, 3: {"1%": 0.1150, "5%": 0.1864}},
+    11: {2: {"1%": 2.564, "5%": 2.355}, 3: {"1%": 0.1448, "5%": 0.2213}},
+    12: {2: {"1%": 2.636, "5%": 2.412}, 3: {"1%": 0.1738, "5%": 0.2537}},
+    13: {2: {"1%": 2.699, "5%": 2.462}, 3: {"1%": 0.2016, "5%": 0.2836}},
+    14: {2: {"1%": 2.755, "5%": 2.507}, 3: {"1%": 0.2280, "5%": 0.3112}},
+    15: {2: {"1%": 2.806, "5%": 2.549}, 3: {"1%": 0.2530, "5%": 0.3367}},
+    16: {2: {"1%": 2.852, "5%": 2.585}, 3: {"1%": 0.2767, "5%": 0.3603}},
+    17: {2: {"1%": 2.894, "5%": 2.620}, 3: {"1%": 0.2990, "5%": 0.3822}},
+    18: {2: {"1%": 2.932, "5%": 2.651}, 3: {"1%": 0.3200, "5%": 0.4025}},
+    19: {2: {"1%": 2.968, "5%": 2.681}, 3: {"1%": 0.3398, "5%": 0.4214}},
+    20: {2: {"1%": 3.001, "5%": 2.709}, 3: {"1%": 0.3585, "5%": 0.4391}},
+    21: {2: {"1%": 3.031, "5%": 0.267}, 3: {"1%": 0.3761, "5%": 0.4556}},
+    22: {2: {"1%": 3.060, "5%": 0.267}, 3: {"1%": 0.3927, "5%": 0.4711}},
+    23: {2: {"1%": 3.087, "5%": 0.267}, 3: {"1%": 0.4085, "5%": 0.4857}},
+    24: {2: {"1%": 3.112, "5%": 0.267}, 3: {"1%": 0.4234, "5%": 0.4994}},
+    25: {2: {"1%": 3.135, "5%": 0.267}, 3: {"1%": 0.4376, "5%": 0.5123}},
+    26: {2: {"1%": 3.157, "5%": 0.267}, 3: {"1%": 0.4510, "5%": 0.5245}},
+    27: {2: {"1%": 3.178, "5%": 0.267}, 3: {"1%": 0.4638, "5%": 0.5536}},
+    28: {2: {"1%": 3.199, "5%": 0.267}, 3: {"1%": 0.4759, "5%": 0.5470}},
+    29: {2: {"1%": 3.218, "5%": 0.267}, 3: {"1%": 0.4875, "5%": 0.5574}},
+    30: {2: {"1%": 3.236, "5%": 0.267}, 3: {"1%": 0.4985, "5%": 0.5672}},
+    31: {2: {"1%": 3.253, "5%": 0.267}, 3: {"1%": 0.5091, "5%": 0.5766}},
+    32: {2: {"1%": 3.270, "5%": 0.267}, 3: {"1%": 0.5192, "5%": 0.5856}},
+    33: {2: {"1%": 3.286, "5%": 0.267}, 3: {"1%": 0.5288, "5%": 0.5941}},
+    34: {2: {"1%": 3.301, "5%": 0.267}, 3: {"1%": 0.5381, "5%": 0.6023}},
+    35: {2: {"1%": 3.316, "5%": 0.267}, 3: {"1%": 0.5469, "5%": 0.6101}},
+    36: {2: {"1%": 3.330, "5%": 0.267}, 3: {"1%": 0.5554, "5%": 0.6175}},
+    37: {2: {"1%": 3.343, "5%": 0.267}, 3: {"1%": 0.5636, "5%": 0.6247}},
+    38: {2: {"1%": 3.356, "5%": 0.267}, 3: {"1%": 0.5724, "5%": 0.6316}},
+    39: {2: {"1%": 3.369, "5%": 0.267}, 3: {"1%": 0.5789, "5%": 0.6382}},
+    40: {2: {"1%": 3.381, "5%": 0.267}, 3: {"1%": 0.5862, "5%": 0.6445}},
 }
-
 
 
 def parse_json_body(request) -> dict:
@@ -392,7 +244,6 @@ def sanitizar_texto(texto, max_len=100, default="") -> str:
         return default
     limpio = str(texto).strip()[:max_len]
     return limpio if limpio else default
-
 
 
 def calcular_estadisticos_iso(participantes_raw: list) -> dict:
@@ -718,7 +569,6 @@ def calcular_estadisticos_iso(participantes_raw: list) -> dict:
     }
 
 
-#
 def crear_logo_lims():
     ruta_logo = BASE_DIR / "static" / "logo.png"
     if ruta_logo.exists():
@@ -735,7 +585,6 @@ def fig_to_rl_image(fig, width=520, height=130):
     plt.close(fig)
     img_buf.seek(0)
     return RLImage(img_buf, width=width, height=height)
-
 
 
 @require_http_methods(["GET", "POST"])
@@ -755,9 +604,9 @@ def login_view(request):
         if user is not None and user.is_active:
             login(request, user)
             request.session.set_expiry(0)
-            logger.info("Inicio de sesión exitoso: usuario='%s'", username)
+            logger.info('accion=login estado=ok usuario="%s"', username)
             return redirect(next_raw)
-        logger.warning("Intento fallido de login: usuario='%s'", username)
+        logger.warning('accion=login estado=warn usuario="%s" motivo="credenciales_invalidas"', username)
         error_msg = "Usuario o contraseña incorrectos."
 
     get_token(request)
@@ -769,20 +618,22 @@ def login_view(request):
 
 @require_http_methods(["POST", "GET"])
 def logout_view(request):
+    usuario = request.user.username if request.user.is_authenticated else ""
     if request.user.is_authenticated:
-        logger.info("Cierre de sesión: usuario='%s'", request.user.username)
+        logger.info('accion=logout estado=ok usuario="%s"', usuario)
     logout(request)
     return redirect("/login")
 
 
-
 @login_required
 def read_index(request):
+    get_token(request)
     return render(request, "vista1.html")
 
 
 @login_required
 def read_registros(request):
+    get_token(request)
     return render(request, "registros.html")
 
 
@@ -817,7 +668,7 @@ def obtener_registros(request):
                     if total_celdas > 0:
                         gran_prom = sum(todos_vals) / total_celdas
             except Exception:
-                logger.warning("Error parseando datos_resumen en registro id=%s", e.id)
+                logger.warning('accion=obtener_registros estado=warn registro_id=%s motivo="datos_resumen_invalido"', e.id)
 
         dictamen_txt = "CONFORME"
         if e.dictamen_grubbs:
@@ -835,11 +686,12 @@ def obtener_registros(request):
                 elif any(x in json_str_upper for x in ("ADVERTENCIA", "STRAGGLER", "DUDOSO")):
                     dictamen_txt = "ADVERTENCIA"
             except Exception:
-                logger.warning("Error parseando dictamen_grubbs en registro id=%s", e.id)
+                logger.warning('accion=obtener_registros estado=warn registro_id=%s motivo="dictamen_grubbs_invalido"', e.id)
 
+        fecha_str = timezone.localtime(e.fecha_registro).strftime("%Y-%m-%d") if e.fecha_registro else "-"
         resultado.append({
             "id": e.id,
-            "fecha": e.fecha_registro.strftime("%Y-%m-%d") if e.fecha_registro else "-",
+            "fecha": fecha_str,
             "muestra": e.num_muestra,
             "metodo": e.metodo,
             "labs": num_labs,
@@ -848,6 +700,7 @@ def obtener_registros(request):
             "dictamen": dictamen_txt,
         })
 
+    logger.info('accion=obtener_registros estado=ok total=%s usuario="%s"', len(resultado), request.user.username)
     return JsonResponse(resultado, safe=False)
 
 
@@ -858,17 +711,21 @@ def guardar(request):
         payload = parse_json_body(request)
         participantes = validar_participantes(payload.get("participantes"))
         res = calcular_estadisticos_iso(participantes)
+        logger.info('accion=calcular estado=ok labs=%s usuario="%s"', len(participantes), request.user.username)
         return JsonResponse(res)
     except ValueError as e:
+        logger.warning('accion=calcular estado=warn usuario="%s" detalle="%s"', request.user.username, str(e))
         return JsonResponse({"detail": str(e)}, status=400)
     except Exception:
-        logger.exception("Error interno en /guardar por usuario='%s'", request.user.username)
+        logger.exception('accion=calcular estado=error usuario="%s"', request.user.username)
         return JsonResponse({"detail": "Error interno al procesar los cálculos."}, status=500)
 
 
 @login_required
 @require_http_methods(["POST"])
 def guardar_avanzado(request):
+    num_muestra = ""
+    metodo = ""
     try:
         payload = parse_json_body(request)
         participantes_list = validar_participantes(payload.get("participantes"))
@@ -923,7 +780,13 @@ def guardar_avanzado(request):
                     dictamen_grubbs=json.dumps(evaluacion_completa),
                 )
 
-        logger.info("Muestra guardada: muestra='%s' usuario='%s'", num_muestra, request.user.username)
+        logger.info(
+            'accion=guardar_avanzado estado=ok muestra="%s" metodo="%s" dictamen="%s" usuario="%s"',
+            num_muestra,
+            metodo,
+            dictamen_global,
+            request.user.username,
+        )
         return JsonResponse({
             "status": "ok",
             "num_muestra": num_muestra,
@@ -934,15 +797,29 @@ def guardar_avanzado(request):
         })
 
     except ValueError as e:
+        logger.warning(
+            'accion=guardar_avanzado estado=warn muestra="%s" metodo="%s" usuario="%s" detalle="%s"',
+            num_muestra,
+            metodo,
+            request.user.username,
+            str(e),
+        )
         return JsonResponse({"detail": str(e)}, status=400)
     except Exception:
-        logger.exception("Error interno al guardar muestra por usuario='%s'", request.user.username)
+        logger.exception(
+            'accion=guardar_avanzado estado=error muestra="%s" metodo="%s" usuario="%s"',
+            num_muestra,
+            metodo,
+            request.user.username,
+        )
         return JsonResponse({"detail": "Error interno al guardar el registro."}, status=500)
 
 
 @login_required
 @require_http_methods(["POST"])
 def exportar_excel(request):
+    num_muestra = ""
+    metodo = ""
     try:
         payload = parse_json_body(request)
         num_muestra = sanitizar_texto(payload.get("num_muestra"), max_len=50, default="S_N").replace("/", "_")
@@ -1053,6 +930,12 @@ def exportar_excel(request):
             pd.DataFrame(filas_grubbs).to_excel(writer, sheet_name="Evaluacion_Grubbs", index=False)
 
         output.seek(0)
+        logger.info(
+            'accion=exportar_excel estado=ok muestra="%s" metodo="%s" usuario="%s"',
+            num_muestra,
+            metodo,
+            request.user.username,
+        )
         return FileResponse(
             output,
             as_attachment=True,
@@ -1060,15 +943,29 @@ def exportar_excel(request):
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     except ValueError as e:
+        logger.warning(
+            'accion=exportar_excel estado=warn muestra="%s" metodo="%s" usuario="%s" detalle="%s"',
+            num_muestra,
+            metodo,
+            request.user.username,
+            str(e),
+        )
         return JsonResponse({"detail": str(e)}, status=400)
     except Exception:
-        logger.exception("Error interno en /exportar_excel por usuario='%s'", request.user.username)
+        logger.exception(
+            'accion=exportar_excel estado=error muestra="%s" metodo="%s" usuario="%s"',
+            num_muestra,
+            metodo,
+            request.user.username,
+        )
         return JsonResponse({"detail": "Error interno al generar el archivo Excel."}, status=500)
 
 
 @login_required
 @require_http_methods(["POST"])
 def exportar_pdf(request):
+    num_muestra_raw = ""
+    metodo = ""
     try:
         payload = parse_json_body(request)
         num_muestra_raw = sanitizar_texto(payload.get("num_muestra"), max_len=50, default="S/N")
@@ -1081,9 +978,9 @@ def exportar_pdf(request):
         muestra_db = MuestraEnsayoDB.objects.filter(num_muestra=num_muestra_raw).first()
 
         if muestra_db and muestra_db.fecha_registro:
-            fecha_emision = muestra_db.fecha_registro.strftime("%d/%m/%Y")
+            fecha_emision = timezone.localtime(muestra_db.fecha_registro).strftime("%d/%m/%Y")
         else:
-            fecha_emision = datetime.date.today().strftime("%d/%m/%Y")
+            fecha_emision = timezone.localtime(timezone.now()).strftime("%d/%m/%Y")
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -1314,6 +1211,12 @@ def exportar_pdf(request):
 
         doc.build(story)
         buffer.seek(0)
+        logger.info(
+            'accion=exportar_pdf estado=ok muestra="%s" metodo="%s" usuario="%s"',
+            num_muestra_raw,
+            metodo,
+            request.user.username,
+        )
         return FileResponse(
             buffer,
             as_attachment=True,
@@ -1321,9 +1224,21 @@ def exportar_pdf(request):
             content_type="application/pdf",
         )
     except ValueError as e:
+        logger.warning(
+            'accion=exportar_pdf estado=warn muestra="%s" metodo="%s" usuario="%s" detalle="%s"',
+            num_muestra_raw,
+            metodo,
+            request.user.username,
+            str(e),
+        )
         return JsonResponse({"detail": str(e)}, status=400)
     except Exception:
-        logger.exception("Error interno en /exportar_pdf por usuario='%s'", request.user.username)
+        logger.exception(
+            'accion=exportar_pdf estado=error muestra="%s" metodo="%s" usuario="%s"',
+            num_muestra_raw,
+            metodo,
+            request.user.username,
+        )
         return JsonResponse({"detail": "Error interno al generar el reporte PDF."}, status=500)
 
 
@@ -1333,6 +1248,7 @@ def obtener_muestra(request, num_muestra):
     muestra_clean = sanitizar_texto(num_muestra, max_len=50)
     muestra = MuestraEnsayoDB.objects.filter(num_muestra=muestra_clean).first()
     if not muestra:
+        logger.warning('accion=obtener_muestra estado=warn muestra="%s" motivo="no_encontrada"', muestra_clean)
         return JsonResponse({"detail": "La muestra solicitada no existe."}, status=404)
 
     try:
@@ -1356,7 +1272,7 @@ def obtener_muestra(request, num_muestra):
                 "valores": valores_limpios,
             })
     except Exception:
-        logger.exception("Error deserializando muestra='%s'", muestra_clean)
+        logger.exception('accion=obtener_muestra estado=error muestra="%s"', muestra_clean)
         return JsonResponse({"detail": "Error interno al leer los datos de la muestra."}, status=500)
 
     resultado = calcular_estadisticos_iso(participantes_limpios)
@@ -1378,6 +1294,7 @@ def obtener_muestra(request, num_muestra):
         "observaciones": muestra.observaciones or "",
     })
 
+    logger.info('accion=obtener_muestra estado=ok muestra="%s" usuario="%s"', muestra_clean, request.user.username)
     return JsonResponse(resultado)
 
 
@@ -1386,11 +1303,17 @@ def obtener_muestra(request, num_muestra):
 def eliminar_registro(request, registro_id):
     muestra = MuestraEnsayoDB.objects.filter(id=registro_id).first()
     if not muestra:
+        logger.warning('accion=eliminar_registro estado=warn registro_id=%s motivo="no_encontrado"', registro_id)
         return JsonResponse({"detail": "El registro solicitado no existe."}, status=404)
 
     num_m = muestra.num_muestra
     muestra.delete()
-    logger.warning("Registro eliminado: id=%s muestra='%s' usuario='%s'", registro_id, num_m, request.user.username)
+    logger.warning(
+        'accion=eliminar_registro estado=ok registro_id=%s muestra="%s" usuario="%s"',
+        registro_id,
+        num_m,
+        request.user.username,
+    )
     return JsonResponse({"mensaje": f"Registro {registro_id} eliminado exitosamente."})
 
 
@@ -1410,6 +1333,7 @@ def metodos_endpoint(request):
             ]
             MetodoNormativoDB.objects.bulk_create([MetodoNormativoDB(nombre=m) for m in metodos_default])
             metodos = list(MetodoNormativoDB.objects.all().values("id", "nombre"))
+        logger.info('accion=listar_metodos estado=ok total=%s usuario="%s"', len(metodos), request.user.username)
         return JsonResponse(metodos, safe=False)
 
     elif request.method == "POST":
@@ -1417,6 +1341,7 @@ def metodos_endpoint(request):
             payload = parse_json_body(request)
             nombre_clean = sanitizar_texto(payload.get("nombre"), max_len=100).upper()
             if not nombre_clean:
+                logger.warning('accion=crear_metodo estado=warn motivo="nombre_vacio" usuario="%s"', request.user.username)
                 return JsonResponse({"detail": "El nombre del método no puede estar vacío."}, status=400)
 
             desc_clean = sanitizar_texto(payload.get("descripcion"), max_len=255, default="")
@@ -1424,16 +1349,22 @@ def metodos_endpoint(request):
                 nombre=nombre_clean,
                 defaults={"descripcion": desc_clean or None},
             )
-            logger.info("Método creado/consultado: nombre='%s' usuario='%s'", nombre_clean, request.user.username)
+            logger.info(
+                'accion=crear_metodo estado=ok metodo="%s" creada=%s usuario="%s"',
+                nombre_clean,
+                created,
+                request.user.username,
+            )
             return JsonResponse({
                 "status": "created" if created else "exists",
                 "id": metodo_obj.id,
                 "nombre": metodo_obj.nombre,
             })
         except ValueError as e:
+            logger.warning('accion=crear_metodo estado=warn usuario="%s" detalle="%s"', request.user.username, str(e))
             return JsonResponse({"detail": str(e)}, status=400)
         except Exception:
-            logger.exception("Error interno en /metodos por usuario='%s'", request.user.username)
+            logger.exception('accion=crear_metodo estado=error usuario="%s"', request.user.username)
             return JsonResponse({"detail": "Error interno al registrar el método."}, status=500)
 
 
@@ -1442,13 +1373,18 @@ def metodos_endpoint(request):
 def eliminar_metodo(request, metodo_id):
     metodo = MetodoNormativoDB.objects.filter(id=metodo_id).first()
     if not metodo:
+        logger.warning('accion=eliminar_metodo estado=warn metodo_id=%s motivo="no_encontrado"', metodo_id)
         return JsonResponse({"detail": "El método solicitado no existe."}, status=404)
 
     nombre = metodo.nombre
     metodo.delete()
-    logger.warning("Método eliminado: id=%s nombre='%s' usuario='%s'", metodo_id, nombre, request.user.username)
+    logger.warning(
+        'accion=eliminar_metodo estado=ok metodo_id=%s metodo="%s" usuario="%s"',
+        metodo_id,
+        nombre,
+        request.user.username,
+    )
     return JsonResponse({"status": "deleted", "id": metodo_id, "nombre": nombre})
-
 
 
 urlpatterns = [
@@ -1469,13 +1405,13 @@ urlpatterns = [
     path("metodos", metodos_endpoint),
     path("metodos/<int:metodo_id>", eliminar_metodo),
 ]
-
-if (BASE_DIR / "static").exists():
-    urlpatterns += static(settings.STATIC_URL, document_root=BASE_DIR / "static")
+static_url = getattr(settings, "STATIC_URL", "") or ""
+if settings.DEBUG and static_url and (BASE_DIR / "static").exists():
+    urlpatterns += static(static_url, document_root=BASE_DIR / "static")
 
 application = get_wsgi_application()
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "__main__")
+    logger.info('accion=arranque estado=ok version="%s" argv=%s', APP_VERSION, sys.argv[1:])
     execute_from_command_line(sys.argv)
