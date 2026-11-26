@@ -178,47 +178,13 @@ django.setup()
 
 
 class AutoCsrfAndHeadersMiddleware:
-    CSRF_JS_SNIPPET = b"""
-<script>
-(function() {
-  function getCookie(name) {
-    let val = null;
-    if (document.cookie && document.cookie !== '') {
-      for (const c of document.cookie.split(';')) {
-        const trimmed = c.trim();
-        if (trimmed.startsWith(name + '=')) {
-          val = decodeURIComponent(trimmed.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return val;
-  }
-  const origFetch = window.fetch;
-  window.fetch = function(input, init) {
-    init = init || {};
-    const method = (init.method || 'GET').toUpperCase();
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      const headers = new Headers(init.headers || {});
-      if (!headers.has('X-CSRFToken')) {
-        headers.set('X-CSRFToken', getCookie('csrftoken') || '');
-      }
-      init.headers = headers;
-      init.credentials = 'same-origin';
-    }
-    return origFetch(input, init);
-  };
-})();
-window.addEventListener("pagehide", function(event) {
-  if (!event.persisted && navigator.sendBeacon) {
-    const formData = new FormData();
-    const token = getCookie("csrftoken");
-    if (token) formData.append("csrfmiddlewaretoken", token);
-    navigator.sendBeacon("/logout", formData);
-  }
-});
-</script>
-</body>"""
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.setdefault("X-Content-Type-Options", "nosniff")
+        return response
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -428,9 +394,7 @@ def sanitizar_texto(texto, max_len=100, default="") -> str:
     return limpio if limpio else default
 
 
-# ==============================================================================
-# 6. LÓGICA DE CÁLCULOS ESTADÍSTICOS (ISO 5725-2)
-# ==============================================================================
+
 def calcular_estadisticos_iso(participantes_raw: list) -> dict:
     if not participantes_raw:
         raise ValueError("No se recibieron participantes.")
